@@ -3,8 +3,7 @@
     "declaration": true,
     "target": "es2015",
     "outDir": "dist",
-    "noImplicitAny": true,
-    "strictNullChecks": true
+    "noImplicitAny": true
   },
   "include": [
     "src/**/*.ts"

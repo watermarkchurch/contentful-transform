@@ -264,7 +264,6 @@ function eval_xform(xform: string, entry: IEntry, context: any): any {
   try {
     return xformFunc.apply(entry, fieldValues)
   } catch(e) {
-    console.log('error!', e)
     return undefined;
   }
 }

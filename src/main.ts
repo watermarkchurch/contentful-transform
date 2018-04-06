@@ -41,8 +41,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   })
 
   if (args.filter) {
-    const filterFunc = require(path.resolve(args.filter))
-    console.log('filter func:', filterFunc)
+    const filterFunc = load_filter_func(args.filter)
 
     tasks.push({
       title: 'filter stream',
@@ -214,5 +213,31 @@ function promisify<T>(result: T): PromiseLike<T> {
     return result;
   } else {
     return Promise.resolve(result)
+  }
+}
+
+function load_filter_func(filter: string): (entry: IEntry, context?: any) => boolean {
+  try {
+    return require(path.resolve(filter))
+  } catch {
+    return (entry, context) => eval_filter(filter, entry, context)
+  }
+}
+
+function eval_filter(filter: string, entry: IEntry, context: any): any {
+  const fieldNames = Object.keys(entry.fields)
+
+  let filterFunc: Function = null
+  eval( `filterFunc = function (sys, ${fieldNames.join(', ')}) {
+    return ${filter};
+  }`)
+  
+  const fieldValues = [entry.sys]
+  fieldValues.push(...fieldNames.map((f) => entry.fields[f]['en-US']))
+
+  try {
+    return filterFunc.apply(entry, fieldValues)
+  } catch {
+    return false;
   }
 }

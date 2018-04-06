@@ -7,8 +7,10 @@ import { Transform, Stream } from 'stream';
 
 export interface ITransformArgs {
   source: string
-  filter: string
+  filter?: string
   transform: string
+  output?: string
+  quiet?: boolean
 }
 
 export default async function Run(args: ITransformArgs): Promise<void> {
@@ -16,17 +18,18 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
   const context = {
     stream: null as fs.ReadStream | NodeJS.ReadableStream,
-    entriesStream: null as NodeJS.ReadableStream
-  }
-  try {
-    await fs.access(args.source, fs.constants.R_OK)
-    context.stream = fs.createReadStream(args.source)
-  } catch (err) {
-    console.log('not a file:', args.source)
+    output: null as fs.WriteStream | NodeJS.WritableStream
   }
 
-  if (!context.stream) {
+  if (args.source == '-') {
     context.stream = process.stdin
+  } else {
+    try {
+      await fs.access(args.source, fs.constants.R_OK)
+      context.stream = fs.createReadStream(args.source)
+    } catch (err) {
+      console.log('not a file:', args.source)
+    }
   }
 
   // todo: download from space
@@ -64,14 +67,29 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     task: pipeIt(() => new Transformer(transformFunc))
   })
 
-  return new Listr(tasks, {concurrent: true}).run(context)
+  if (args.output && args.output != '-') {
+    context.output = fs.createWriteStream(args.output)
+  } else {
+    context.output = process.stdout
+    // listr logs to stdout
+    args.quiet = true
+  }
+
+  context.stream.pipe(context.output)
+
+  return new Listr(tasks, 
+    {
+      concurrent: true,
+      renderer: args.quiet ? 'silent' : 'default'
+    })
+    .run(context)
 }
 
 export type TransformFunc = (e: IEntry) => IEntry | PromiseLike<IEntry>
 
 const identityXform: TransformFunc = (e: IEntry) => {
   return new Promise<IEntry>((resolve, reject) => {
-    setTimeout(() => resolve(e), 100)
+    setTimeout(() => resolve(e), 10)
   })
 }
 

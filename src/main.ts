@@ -60,10 +60,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     })
   }
 
-  let transformFunc = identityXform
-  if (args.transform) {
-    transformFunc = require(path.resolve(args.transform))
-  }
+  const transformFunc = load_xform_func(args.transform)
 
   tasks.push({
     title: 'transform stream',
@@ -239,5 +236,35 @@ function eval_filter(filter: string, entry: IEntry, context: any): any {
     return filterFunc.apply(entry, fieldValues)
   } catch {
     return false;
+  }
+}
+
+function load_xform_func(xform: string): (entry: IEntry, context?: any) => undefined | IEntry | PromiseLike<IEntry> {
+  try {
+    return require(path.resolve(xform))
+  } catch {
+    return (entry, context) => eval_xform(xform, entry, context)
+  }
+}
+
+function eval_xform(xform: string, entry: IEntry, context: any): any {
+  const fieldNames = Object.keys(entry.fields)
+
+  let xformFunc: Function = null
+  eval(`xformFunc = function (_entry, sys, ${fieldNames.join(', ')}) {
+    ${xform}
+
+    ${fieldNames.map((f) => `_entry.fields["${f}"]["en-US"] = ${f}`).join(';\n')}
+    return _entry;
+  }`)
+  
+  const fieldValues = [entry, entry.sys]
+  fieldValues.push(...fieldNames.map((f) => entry.fields[f]['en-US']))
+
+  try {
+    return xformFunc.apply(entry, fieldValues)
+  } catch(e) {
+    console.log('error!', e)
+    return undefined;
   }
 }

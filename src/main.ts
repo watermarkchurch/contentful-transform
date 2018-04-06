@@ -6,6 +6,10 @@ import * as JSONStream from 'JSONStream'
 import { Transform, Stream } from 'stream';
 import { deepEqual } from 'assert';
 
+import { pipeIt, promisify } from './utils';
+import { FilterStream } from './filter';
+import { IEntry } from './model';
+
 export interface ITransformArgs {
   source: string
   filter?: string
@@ -28,8 +32,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     try {
       await fs.access(args.source, fs.constants.R_OK)
       context.stream = fs.createReadStream(args.source)
-    } catch (err) {
-      console.log('not a file:', args.source)
+    } catch {
     }
   }
 
@@ -41,22 +44,10 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   })
 
   if (args.filter) {
-    const filterFunc = load_filter_func(args.filter)
 
     tasks.push({
       title: 'filter stream',
-      task: pipeIt(() => new Transform({
-        objectMode: true,
-        transform: (chunk, encoding, callback) => {
-          const entry = (chunk as any) as IEntry
-
-          if (filterFunc(entry)) {
-            callback(null, entry)
-          } else {
-            callback(null, null)
-          }
-        }
-      }))
+      task: pipeIt(FilterStream(args.filter))
     })
   }
 
@@ -145,97 +136,6 @@ class Transformer extends Transform {
     } catch(err) {
       cb(err)
     }
-  }
-}
-
-export interface IEntry { 
-  sys: { 
-    space: { sys: any },
-    id: string,
-    type: 'Entry',
-    createdAt: string,
-    updatedAt: string,
-    createdBy: { sys: any },
-    updatedBy: { sys: any },
-    publishedCounter: number,
-    version: number,
-    publishedBy: { sys: any },
-    publishedVersion: number,
-    firstPublishedAt: string,
-    publishedAt: string,
-    contentType: { sys: any } 
- },
- fields: {
-  [name: string]: {
-    [locale: string]: any
-  }
- }
-}
-
-function pipeIt(taskImpl: (ctx?: any, task?: Listr.ListrTaskWrapper) => Stream):
-    (ctx: any, task: Listr.ListrTaskWrapper) => Promise<void> {
-
-  return (ctx, task) => {
-    const stream = taskImpl(ctx)
-
-    let entryCount = 0
-    stream.on('data', () => { 
-      entryCount++;
-      task.output = `processed entry #${entryCount}`
-    })
-    const ret = new Promise<void>((resolve, reject) => {
-      stream.on('end', () => {
-        task.title += ` (${entryCount} entries)`
-        resolve()
-      })
-      stream.on('error', (err) => {
-        reject(new Error(err))
-      })
-    })
-
-    ctx.stream = ctx.stream.pipe(stream)
-    return ret
-  }
-}
-
-function isPromiseLike<T>(arg: T | PromiseLike<T>): arg is PromiseLike<T> {
-  if (arg && typeof (arg as any).then === 'function') {
-    return true;
-  }
-  return false;
-}
-
-function promisify<T>(result: T): PromiseLike<T> {
-  if (isPromiseLike(result)) {
-    return result;
-  } else {
-    return Promise.resolve(result)
-  }
-}
-
-function load_filter_func(filter: string): (entry: IEntry, context?: any) => boolean {
-  try {
-    return require(path.resolve(filter))
-  } catch {
-    return (entry, context) => eval_filter(filter, entry, context)
-  }
-}
-
-function eval_filter(filter: string, entry: IEntry, context: any): any {
-  const fieldNames = Object.keys(entry.fields)
-
-  let filterFunc: Function = null
-  eval( `filterFunc = function (sys, ${fieldNames.join(', ')}) {
-    return ${filter};
-  }`)
-  
-  const fieldValues = [entry.sys]
-  fieldValues.push(...fieldNames.map((f) => entry.fields[f]['en-US']))
-
-  try {
-    return filterFunc.apply(entry, fieldValues)
-  } catch {
-    return false;
   }
 }
 

@@ -4,7 +4,7 @@
   "description": "",
   "main": "dist/main.js",
   "bin": {
-    "contentful-transform": "dist/index.js"
+    "contentful-transform": "index.js"
   },
   "scripts": {
     "test": "mocha --require ts-node/register src/**/*.test.ts",

@@ -10,7 +10,7 @@
     "test": "mocha --require ts-node/register src/**/*.test.ts",
     "test-watch": "nodemon --watch src/ -e ts --exec 'npm run test'",
     "build": "tsc",
-    "prepublish": "npm run build"
+    "prepare": "npm run build"
   },
   "author": "Gordon Burgett (gordon@gordonburgett.net)",
   "license": "MIT",

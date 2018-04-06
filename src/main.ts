@@ -41,6 +41,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
   if (args.filter) {
     const filterFunc = require(path.resolve(args.filter))
+    console.log('filter func:', filterFunc)
 
     tasks.push({
       title: 'filter stream',
@@ -50,7 +51,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
           const entry = (chunk as any) as IEntry
 
           if (filterFunc(entry)) {
-            callback(entry)
+            callback(null, entry)
+          } else {
+            callback(null, null)
           }
         }
       }))
@@ -75,7 +78,24 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     args.quiet = true
   }
 
-  context.stream.pipe(context.output)
+  tasks.push({
+    title: 'write output',
+    task: (ctx, task) => {
+      const stringified = JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
+      const ret = new Promise<void>((resolve, reject) => {
+        const stream = context.output as Stream;
+
+        stream.on('end', () => {
+          resolve()
+        })
+        stream.on('error', (err) => {
+          console.error('stream error!', err)
+          reject(new Error(err))
+        })
+      })
+      ctx.stream.pipe(stringified).pipe(context.output)
+    }
+  })
 
   return new Listr(tasks, 
     {
@@ -157,10 +177,10 @@ function pipeIt(taskImpl: (ctx?: any, task?: Listr.ListrTaskWrapper) => Stream):
     })
     const ret = new Promise<void>((resolve, reject) => {
       stream.on('end', () => {
+        task.title += ` (${entryCount} entries)`
         resolve()
       })
       stream.on('error', (err) => {
-        console.error('stream error!', err)
         reject(new Error(err))
       })
     })

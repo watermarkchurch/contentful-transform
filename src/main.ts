@@ -4,6 +4,7 @@ import * as fs from 'fs-extra'
 import * as path from 'path'
 import * as JSONStream from 'JSONStream'
 import { Transform, Stream } from 'stream';
+import { deepEqual } from 'assert';
 
 export interface ITransformArgs {
   source: string
@@ -124,18 +125,29 @@ class Transformer extends Transform {
     this.xformFunc = xform
   }
 
-  _transform(chunk: IEntry, encoding: string, cb: Function) {
-    const xformed = this.xformFunc(chunk)
-    if (isPromiseLike(xformed)) {
-      xformed.then((result: any) => {
-        cb(null, result)
-      })
+  async _transform(chunk: IEntry, encoding: string, cb: Function) {
+    try {
+      const clone = JSON.parse(JSON.stringify(chunk))
+      let xformed = await promisify(
+        this.xformFunc(clone)
+      )
 
-      if (typeof (xformed as any).catch === 'function') {
-        (xformed as any).catch((err: any) => cb(err))
+      if (xformed === undefined) { xformed = clone }
+
+      try {
+        deepEqual(chunk, xformed)
+        cb(null, null)
+      } catch {
+        // not deep equal - that means we need to write it out.
+        // We also need to update it's version to reflect that a change was made
+        xformed.sys.version = xformed.sys.version + 1
+        xformed.sys.publishedVersion = xformed.sys.version
+        xformed.sys.publishedCounter = xformed.sys.publishedCounter + 1
+
+        cb(null, xformed)
       }
-    } else {
-      cb(null, xformed)
+    } catch(err) {
+      cb(err)
     }
   }
 }
@@ -149,10 +161,10 @@ export interface IEntry {
     updatedAt: string,
     createdBy: { sys: any },
     updatedBy: { sys: any },
-    publishedCounter: 1,
-    version: 2,
+    publishedCounter: number,
+    version: number,
     publishedBy: { sys: any },
-    publishedVersion: 1,
+    publishedVersion: number,
     firstPublishedAt: string,
     publishedAt: string,
     contentType: { sys: any } 
@@ -191,8 +203,16 @@ function pipeIt(taskImpl: (ctx?: any, task?: Listr.ListrTaskWrapper) => Stream):
 }
 
 function isPromiseLike<T>(arg: T | PromiseLike<T>): arg is PromiseLike<T> {
-  if (typeof (arg as any).then === 'function') {
+  if (arg && typeof (arg as any).then === 'function') {
     return true;
   }
   return false;
+}
+
+function promisify<T>(result: T): PromiseLike<T> {
+  if (isPromiseLike(result)) {
+    return result;
+  } else {
+    return Promise.resolve(result)
+  }
 }

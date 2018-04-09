@@ -2,6 +2,7 @@ import {Readable, Writable, Stream, PassThrough} from 'stream'
 import { expect } from 'chai';
 
 import { FilterStream } from './filter'
+import {toReadable, collect} from './utils'
 
 describe('filter', () => {
   describe('with func', () => {
@@ -131,42 +132,3 @@ describe('filter', () => {
     })
   })
 })
-
-function toReadable(entries: any[]): Readable {
-  let index = 0;
-  return new Readable({
-    objectMode: true,
-    read: function(size) {
-      if(index >= entries.length) {
-        // eof
-        this.push(null)
-      }
-      while(index < entries.length){
-        if (!this.push(entries[index++])) {
-          break
-        }
-      }
-    }
-  })
-}
-
-function collect(stream: Stream): Promise<any[]> {
-  const result = []
-
-  return new Promise((resolve, reject) => {
-    stream.pipe(new Writable({
-      objectMode: true,
-      write: (chunk, encoding, callback) => {
-        console.log('collecting entry', chunk.sys.id)
-        result.push(chunk)
-        callback()
-      }
-    }))
-      .on('error', (err) => {
-        reject(err)
-      })
-      .on('finish', () => {
-        resolve(result)
-      })
-  })
-}

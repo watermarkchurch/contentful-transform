@@ -29,7 +29,11 @@ export function pipeIt(taskImpl: Stream | StreamWrapper):
       })
     })
 
-    ctx.stream = ctx.stream.pipe(stream)
+    if (ctx.stream) {
+      ctx.stream = ctx.stream.pipe(stream)
+    } else {
+      ctx.stream = stream
+    }
     return ret
   }
 }

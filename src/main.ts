@@ -1,18 +1,18 @@
 import * as Listr from 'listr'
 import {ListrTask} from 'listr'
 import * as fs from 'fs-extra'
-import * as path from 'path'
 import * as JSONStream from 'JSONStream'
 import { Transform, Stream } from 'stream';
-import { deepEqual } from 'assert';
 
-import { pipeIt, promisify } from './utils';
+import { pipeIt } from './utils';
 import { FilterStream } from './filter';
 import { TransformStream } from './transform';
 import { IEntry } from './model';
+import { EntriesStream } from './entries_stream';
 
 export interface ITransformArgs {
   source: string
+  accessToken: string,
   filter?: string
   transform: string
   output?: string
@@ -36,16 +36,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     } catch {
     }
   }
-
-  // todo: download from space
-
-  tasks.push({
-    title: 'parse stream',
-    task: pipeIt(() => JSONStream.parse('entries.*'))
-  })
+  if (context.stream) {
+    tasks.push({
+      title: 'parse stream',
+      task: pipeIt(JSONStream.parse('entries.*'))
+    })
+  } else {
+    tasks.push({
+      title: `Download from space ${args.source}`,
+      task: pipeIt(EntriesStream(args.source, args.accessToken))
+    })
+  }
 
   if (args.filter) {
-
     tasks.push({
       title: 'filter stream',
       task: pipeIt(FilterStream(args.filter))

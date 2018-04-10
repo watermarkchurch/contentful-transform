@@ -7,6 +7,7 @@ const argv = yargs
   .command('transform', 'The transformation to apply')
   .alias('s', 'source').describe('source', 'The source file to load (default reads from stdin)')
   .default('source', '-')
+  .alias('a', 'access-token').describe('access-token', 'The contentful access token to use')
   .alias('o', 'output').describe('output', 'The output file to write to.  Default stdout.')
   .alias('f', 'filter').describe('filter', 'A filtering function to apply')
   .alias('q', 'quiet').describe('quiet', 'Do not output task progress')
@@ -17,8 +18,12 @@ const argv = yargs
 
 Run({
   source: argv.source || '-',
+  accessToken: argv.accessToken || process.env['CONTENTFUL_ACCESS_TOKEN'],
   transform: argv._[0],
   filter: argv.filter,
   output: argv.output,
   quiet: argv.quiet
 })
+  .catch((err) => {
+    console.error(err)
+  })

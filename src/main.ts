@@ -12,8 +12,10 @@ import { EntriesStream } from './entries_stream';
 
 export interface ITransformArgs {
   source: string
-  accessToken: string,
+  accessToken?: string,
   filter?: string
+  contentType?: string
+  query?: string,
   transform: string
   output?: string
   quiet?: boolean
@@ -44,7 +46,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   } else {
     tasks.push({
       title: `Download from space ${args.source}`,
-      task: pipeIt(EntriesStream(args.source, args.accessToken))
+      task: pipeIt(EntriesStream(args.source, args.accessToken, args.contentType, args.query))
     })
   }
 

@@ -14,6 +14,7 @@ export interface ITransformArgs {
   source: string
   accessToken?: string,
   filter?: string
+  raw?: boolean,
   contentType?: string
   query?: string,
   transform: string
@@ -31,19 +32,22 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
   if (args.source == '-') {
     context.stream = process.stdin
+    tasks.push({
+      title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
+      task: pipeIt(JSONStream.parse(args.raw ? undefined : 'entries.*'))
+    })
   } else {
     try {
       await fs.access(args.source, fs.constants.R_OK)
       context.stream = fs.createReadStream(args.source)
+      tasks.push({
+        title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
+        task: pipeIt(JSONStream.parse(args.raw ? undefined : 'entries.*'))
+      })
     } catch {
     }
   }
-  if (context.stream) {
-    tasks.push({
-      title: 'parse stream',
-      task: pipeIt(JSONStream.parse('entries.*'))
-    })
-  } else {
+  if (!context.stream) {
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(EntriesStream(args.source, args.accessToken, args.contentType, args.query))
@@ -73,7 +77,10 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   tasks.push({
     title: 'write output',
     task: (ctx, task) => {
-      const stringified = JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
+      const stringified = 
+        args.raw ?
+          JSONStream.stringify('', '\n', '') :
+          JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
       const ret = new Promise<void>((resolve, reject) => {
         const stream = context.output as Stream;
 

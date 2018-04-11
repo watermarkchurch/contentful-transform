@@ -13,7 +13,8 @@ const argv = yargs
   .implies('query', 'content-type')
   .alias('q', 'query').describe('query', 'An entry filter query used when loading from a space ID')
   .alias('f', 'filter').describe('filter', 'A filtering function to apply after loading the data.')
-  .alias('x', 'quiet').describe('quiet', 'Do not output task progress')
+  .alias('r', 'raw').option('raw', { boolean: true }).describe('raw', 'Accept input & write output as a newline-separated stream of objects rather than wrapped in the Contentful export/import format')
+  .alias('x', 'quiet').option('quiet', { boolean: true }).describe('quiet', 'Do not output task progress')
   .demandCommand(1)
   .example("cat contentful-export.json | $0 'url=url.replace(/\/$/, \"\")'", "processes the file from stdin and trims trailing slashes from URLs")
   .example("$0 -s contentful-export.json -f 'sys.contentType.sys.id==\"foo\"' '_entry.fields.new_field[\"en-US\"]=\"something new\"", "adds a new field to every entry in the given file matching the 'foo' content type")
@@ -24,6 +25,7 @@ Run({
   accessToken: argv.accessToken || process.env['CONTENTFUL_ACCESS_TOKEN'],
   transform: argv._[0],
   filter: argv.filter,
+  raw: argv.raw,
   contentType: argv.contentType,
   query: argv.query,
   output: argv.output,

@@ -14,9 +14,7 @@ export function TransformStream(transform: string | TransformFunc): Transform {
 }
 
 const identityXform: TransformFunc = (e: IEntry) => {
-  return new Promise<IEntry>((resolve, reject) => {
-    setTimeout(() => resolve(e), 10)
-  })
+  return e
 }
 
 class Transformer extends Transform {
@@ -58,6 +56,10 @@ class Transformer extends Transform {
 }
 
 function load_xform_func(xform: string | TransformFunc): (entry: IEntry, context?: any) => undefined | IEntry | PromiseLike<IEntry> {
+  if (!xform || xform == '') {
+    return identityXform;
+  }
+
   if (isFunc(xform)) {
     return xform;
   }

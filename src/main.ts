@@ -26,28 +26,34 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   const tasks: Array<ListrTask> = []
 
   const context = {
-    stream: null as fs.ReadStream | NodeJS.ReadableStream,
     output: null as fs.WriteStream | NodeJS.WritableStream
   }
 
   if (args.source == '-') {
-    context.stream = process.stdin
     tasks.push({
       title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
-      task: pipeIt(JSONStream.parse(args.raw ? undefined : 'entries.*'))
+      task: pipeIt(
+        process.stdin
+          .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
+          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+      )
     })
   } else {
     try {
       await fs.access(args.source, fs.constants.R_OK)
-      context.stream = fs.createReadStream(args.source)
       tasks.push({
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
-        task: pipeIt(JSONStream.parse(args.raw ? undefined : 'entries.*'))
+        task: pipeIt(
+          fs.createReadStream(args.source)
+          .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
+          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+        )
       })
     } catch {
     }
   }
-  if (!context.stream) {
+
+  if (tasks.length == 0) {
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(EntriesStream(args.source, args.accessToken, args.contentType, args.query))
@@ -79,7 +85,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     task: (ctx, task) => {
       const stringified = 
         args.raw ?
-          JSONStream.stringify('', '\n', '') :
+          JSONStream.stringify(false) :
           JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
       const ret = new Promise<void>((resolve, reject) => {
         const stream = context.output as Stream;

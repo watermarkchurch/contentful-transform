@@ -144,6 +144,31 @@ $ contentful-transform -s <space ID> -o transformed.json \
     'url = url + "?legacy=true"'
 ```
 
+#### Using stdin as a source
+
+If you don't specify a `--source` or `--output`, `contentful-transform` will read
+from and write to stdout rather than connecting to Contentful to download entries.
+Which means you can do any of the following:
+
+```bash
+# process the results of a curl and redirect output to 'results.json'
+$ curl -H "Authorization: Bearer $CONTENTFUL_ACCESS_TOKEN" https://cdn.contentful.com/spaces/<space Id>/entries | \
+    contentful-transform 'name = name.toLowerCase()' > results.json
+```
+
+```bash
+# load a contentful export file
+$ contentful-export --space-id <space> --management-token $CONTENTFUL_MANAGEMENT_TOKEN
+  ...
+  Stored space data to json file at: ~/contentful-export-7yx6ovlj39n5-2018-04-13T09-24-82.json
+  
+# read the file using the --source flag
+$ contentful-transform -s ~/contentful-export-7yx6ovlj39n5-2018-04-13T09-24-82.json 'name = name.toLowerCase()' > results.json
+
+# read the file by redirecting stdin
+$ contentful-transform 'name = name.toLowerCase()' < ~/contentful-export-7yx6ovlj39n5-2018-04-13T09-24-82.json > results.json 
+```
+
 #### Raw mode
 
 In Raw mode, `contentful-transform` accepts input as a series of JSON objects
@@ -197,6 +222,11 @@ $ infinite_sync.sh -s <space1> | \
 ```
 
 For stability this could be a linux service installed on your web host.
+
+Hint:
+  Producing a stream of newline-separated entries from the output of a CDN request is
+  easy with [jq](https://stedolan.github.io/jq/) using the `--compact-output` flag:  
+  `<curl> | jq -c '.items[]'`
 
 # TODO:
 

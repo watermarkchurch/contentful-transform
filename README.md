@@ -200,6 +200,6 @@ For stability this could be a linux service installed on your web host.
 
 # TODO:
 
-[ ] - Still gotta figure out how to re-upload entries to a space after they've been transformed
-[ ] - It might be useful in raw mode to write out every entry, regardless of whether it's been transformed.  Could be a flag.
-[ ] - Allow users to give an empty transform to just get the infinite streaming part?  But what does do that `jq` does not?
+[ ] - Still gotta figure out how to re-upload entries to a space after they've been transformed  
+[ ] - It might be useful in raw mode to write out every entry, regardless of whether it's been transformed.  Could be a flag.  
+[ ] - Allow users to give an empty transform to just get the infinite streaming part?  But what does do that `jq` does not?  

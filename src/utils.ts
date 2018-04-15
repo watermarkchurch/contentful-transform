@@ -95,5 +95,7 @@ export function collect(stream: Stream): Promise<any[]> {
       .on('finish', () => {
         resolve(result)
       })
+
+    stream.on('error', (err) => reject(err))
   })
 }

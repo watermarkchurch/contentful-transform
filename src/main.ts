@@ -8,7 +8,7 @@ import { pipeIt } from './utils';
 import { FilterStream } from './filter';
 import { TransformStream } from './transform';
 import { IEntry } from './model';
-import { EntriesStream } from './entries_stream';
+import { CdnSource } from './cdn_source';
 
 export interface ITransformArgs {
   source: string
@@ -54,9 +54,13 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   if (tasks.length == 0) {
+    const source = new CdnSource({
+      spaceId: args.source,
+      accessToken: args.accessToken
+    })
     tasks.push({
       title: `Download from space ${args.source}`,
-      task: pipeIt(EntriesStream(args.source, args.accessToken, args.contentType, args.query))
+      task: pipeIt(source.stream(args.contentType, args.query))
     })
   }
 

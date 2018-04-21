@@ -38,33 +38,49 @@ export class CdnSource {
           bearer: accessToken
         }
       })
-  
       req.pipe(ret, { end: false })
+
       let counter = 0;
+      let status = 0;
       ret.on('data', () => {
         counter++;
       })
       req.once('end', () => {
-        if (counter >= 1000) {
+        if (status == 200 && counter >= 1000) {
           // get the next page
           makeReq(skip + 1000)
-        } else {
+        } else if (status != 429) {
           // perpetuate the end event
           ret.emit('end', skip + counter)
         }
       })
       req.on('error', (err) => {
-        console.log('error!', err)
-        ret.emit('error', `Error making request: ${err}`)
+        ret.emit('error', new Error(`Error making request: ${err}`))
       })
       req.on('response', (resp) => {
-        if (resp.statusCode != 200) {
-          ret.emit('error', `Error making request: ${resp.statusCode}`)
+        status = resp.statusCode
+        if (resp.statusCode == 429) {
+          let retrySeconds = 1
+          try {
+            const reset = resp.headers['x-contentful-ratelimit-reset']
+            if (reset) {
+              retrySeconds = parseInt(reset.toString())
+            }
+          } catch {
+            // couldn't parse the header - default wait is 1 second
+          }
+
+          setTimeout(
+            () => makeReq(skip + counter),
+            retrySeconds * 1000 + 100
+          )
+          ret.emit('ratelimit', retrySeconds)
+        } else if (resp.statusCode != 200) {
+          ret.emit('error', new Error(`Error making request: ${resp.statusCode}`))
         }
       })
     }
-  
-      // the input source is probably a space ID - try it
+
     let skip = 0
     makeReq(skip)
   

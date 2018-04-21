@@ -19,6 +19,9 @@ export function pipeIt(taskImpl: Stream | StreamWrapper):
       entryCount++;
       task.output = `processed entry #${entryCount}`
     })
+    stream.on('ratelimit', (retrySeconds) => {
+      task.output = `processed entry #${entryCount} Rate limited - retrying in ${retrySeconds * 1000}ms`
+    })
     const ret = new Promise<void>((resolve, reject) => {
       stream.on('end', () => {
         task.title += ` (${entryCount} entries)`

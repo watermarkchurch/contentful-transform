@@ -3,6 +3,7 @@ import * as path from 'path'
 import {Readable, Writable, Stream, PassThrough} from 'stream'
 import { expect } from 'chai'
 import * as nock from 'nock'
+import * as sinon from 'sinon'
 
 import {toReadable, collect} from './utils'
 import {IEntry} from './model'
@@ -13,6 +14,17 @@ const responseHeaders = {
 }
 
 describe('cdn_source', () => {
+  let clock: sinon.SinonFakeTimers
+  beforeEach(() => {
+    clock = sinon.useFakeTimers()
+  })
+
+  afterEach(() => {
+    clock.restore()
+    clock = undefined
+  })
+
+
   it('reads a download of 999 entries', async () => {
     const entries = await makeEntries(999);
     nock('https://cdn.contentful.com')
@@ -107,7 +119,71 @@ describe('cdn_source', () => {
     }
   })
 
-  it('automatically retries when rate limited')
+  it('automatically retries when rate limited', async () => {
+    const page1 = await makeEntries(1000);
+    const page2 = await makeEntries(999)
+    nock('https://cdn.contentful.com')
+      .get('/spaces/testspace/entries?limit=1000&skip=0&locale=*')
+      .reply(200, {
+        "sys": { "type": "Array" },
+        "skip": 0,
+        "limit": 1000,
+        "total": 1999,
+        "items": page1
+      },
+      responseHeaders);
+    
+    // rate limited
+    nock('https://cdn.contentful.com')
+      .get('/spaces/testspace/entries?limit=1000&skip=1000&locale=*')
+      .reply(429, null, Object.assign({
+        'X-Contentful-RateLimit-Reset': 900
+      }, responseHeaders))
+
+    nock('https://cdn.contentful.com')
+      .get('/spaces/testspace/entries?limit=1000&skip=1000&locale=*')
+      .reply(200, {
+        "sys": { "type": "Array" },
+        "skip": 1000,
+        "limit": 1000,
+        "total": 1999,
+        "items": page2
+      },
+      responseHeaders);
+    
+    const instance = new CdnSource({spaceId: 'testspace', accessToken: 'test'}) 
+
+    // act
+    const stream = instance.stream()
+    const resultsPromise = collect(stream)
+
+    // assert
+    let count = 0;
+    stream.on('data', () => {
+      count++;
+    })
+    let rateLimitCount = 0;
+    stream.on('ratelimit', (retrySeconds) => {
+      rateLimitCount++;
+      expect(count).to.eq(1000)
+      expect(retrySeconds).to.eq(900)
+
+      console.log('ticking', retrySeconds * 1000 + 10)
+      clock.tick(retrySeconds * 1000 + 200)
+    })
+
+    const results = <IEntry[]> await resultsPromise
+
+    expect(rateLimitCount).to.eq(1)
+
+    expect(results).to.have.length(1999)
+    for(var i = 0; i < 1000; i++) {
+      expect(results[i]).to.deep.equal(page1[i])
+    }
+    for(var i = 1000; i < 1999; i++) {
+      expect(results[i]).to.deep.equal(page2[i - 1000])
+    }
+  })
 })
 
 const fixturesDir = path.join(__dirname, '../fixtures')

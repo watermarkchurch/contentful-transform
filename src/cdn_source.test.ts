@@ -168,7 +168,6 @@ describe('cdn_source', () => {
       expect(count).to.eq(1000)
       expect(retrySeconds).to.eq(900)
 
-      console.log('ticking', retrySeconds * 1000 + 10)
       clock.tick(retrySeconds * 1000 + 200)
     })
 

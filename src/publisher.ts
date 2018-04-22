@@ -30,8 +30,12 @@ export class Publisher extends Writable {
   }
 
   _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
+    this.doReq(chunk, callback)
+  }
+
+  private doReq(chunk: IEntry, cb: (err: any, resp?: request.Response) => void) {
     const { host, spaceId, accessToken } = this.config
-    const req = request.put(`${host}/spaces/${spaceId}/entries/${chunk.sys.id}`, {
+    request.put(`${host}/spaces/${spaceId}/entries/${chunk.sys.id}`, {
       auth: {
         bearer: accessToken
       },
@@ -43,12 +47,28 @@ export class Publisher extends Writable {
       body: JSON.stringify(chunk)
     }, (error, response, body) => {
       if (error) {
-        callback(error)
+        cb(error)
       } else {
-        if (response.statusCode != 200) {
-          callback(new Error(`${response.statusCode} ${response.body}`))
+        if (response.statusCode == 429) {
+          let retrySeconds = 1
+          try {
+            const reset = response.headers['x-contentful-ratelimit-reset']
+            if (reset) {
+              retrySeconds = parseInt(reset.toString())
+            }
+          } catch {
+            // couldn't parse the header - default wait is 1 second
+          }
+
+          setTimeout(
+            () => this.doReq(chunk, cb),
+            retrySeconds * 1000 + 100
+          )
+          this.emit('ratelimit', retrySeconds)
+        } else if (response.statusCode != 200) {
+          cb(new Error(`${response.statusCode} ${response.body}`))
         } else {
-          callback()
+          cb(null, response)
         }
       }
     })

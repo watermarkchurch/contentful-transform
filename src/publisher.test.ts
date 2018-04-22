@@ -34,7 +34,7 @@ describe('publisher', () => {
       return nock(`https://api.contentful.com`)
         .put(`/spaces/testspace/entries/${e.sys.id}`,
         (body: IEntry) => {
-          return true
+          return body.sys.id == e.sys.id
         },
         {
           reqheaders: {
@@ -65,9 +65,7 @@ describe('publisher', () => {
     const entry = (await makeEntries(1))[0]
     const s = nock(`https://api.contentful.com`)
       .put(`/spaces/testspace/entries/${entry.sys.id}`,
-      (body: IEntry) => {
-        return true
-      },
+      (body: IEntry) => true,
       {
         reqheaders: {
           'content-type': 'application/vnd.contentful.management.v1+json',
@@ -97,7 +95,51 @@ describe('publisher', () => {
     }
   })
 
-  it('retries on 429 too many requests')
+  it('retries on 429 too many requests', async () => {
+    const entries = await makeEntries(10)
+    const scopes = entries.map((e) => {
+      nock('https://api.contentful.com')
+        .put(`/spaces/testspace/entries/${e.sys.id}`)
+        .reply(429, null, Object.assign({
+          'X-Contentful-RateLimit-Reset': 10
+        }, responseHeaders))
+        
+      return nock(`https://api.contentful.com`)
+        .put(`/spaces/testspace/entries/${e.sys.id}`,
+        (body: IEntry) => true,
+        {
+          reqheaders: {
+            'content-type': 'application/vnd.contentful.management.v1+json',
+            'x-contentful-content-type': e.sys.contentType.sys.id,
+            'x-contentful-version': e.sys.version.toString(),
+            host: 'api.contentful.com',
+            authorization: 'bearer test'
+          }
+        })
+        .reply(200, e, responseHeaders)
+    })
+    const instance = new Publisher({spaceId: 'testspace', accessToken: 'test'})
+    const readable = createReader(entries)
+
+    let rateLimitCount = 0;
+    instance.on('ratelimit', (retrySeconds) => {
+      rateLimitCount++;
+      expect(retrySeconds).to.eq(10)
+
+      clock.tick(retrySeconds * 1000 + 200)
+    })
+
+    // act
+    await awaitDone(readable.pipe(instance))
+
+    // assert
+    scopes.forEach(s => {
+      if(!s.isDone()) {
+        throw new Error(s.pendingMocks().join(','))
+      }
+    })
+    expect(rateLimitCount).to.equal(entries.length)
+  })
 })
 
 const fixturesDir = path.join(__dirname, '../fixtures')

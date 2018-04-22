@@ -29,7 +29,7 @@ export class Publisher extends Writable {
     }, config)
   }
 
-  _write(chunk: IEntry, encoding: string, callback: (err?: Error) => void) {
+  _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
     const { host, spaceId, accessToken } = this.config
     const req = request.put(`${host}/spaces/${spaceId}/entries/${chunk.sys.id}`, {
       auth: {
@@ -45,7 +45,11 @@ export class Publisher extends Writable {
       if (error) {
         callback(error)
       } else {
-        callback()
+        if (response.statusCode != 200) {
+          callback(new Error(`${response.statusCode} ${response.body}`))
+        } else {
+          callback()
+        }
       }
     })
   }

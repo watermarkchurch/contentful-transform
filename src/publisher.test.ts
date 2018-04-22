@@ -13,7 +13,7 @@ const responseHeaders = {
   'content-type': 'application/vnd.contentful.delivery.v1+json'
 }
 
-describe('cdn_source', () => {
+describe('publisher', () => {
   let clock: sinon.SinonFakeTimers
   beforeEach(() => {
     clock = sinon.useFakeTimers()
@@ -31,9 +31,6 @@ describe('cdn_source', () => {
   it('publishes entries written to stream', async () => {
     const entries = await makeEntries(10)
     const scopes = entries.map((e) => {
-      if (e.sys.id == '3A79Li0v0c8GIk6ygYuYQg') {
-        console.log(e)
-      }
       return nock(`https://api.contentful.com`)
         .put(`/spaces/testspace/entries/${e.sys.id}`,
         (body: IEntry) => {
@@ -64,7 +61,41 @@ describe('cdn_source', () => {
     })
   })
 
-  it('logs to stderr when entry publish fails')
+  it('raises error event when entry publish fails', async () => {
+    const entry = (await makeEntries(1))[0]
+    const s = nock(`https://api.contentful.com`)
+      .put(`/spaces/testspace/entries/${entry.sys.id}`,
+      (body: IEntry) => {
+        return true
+      },
+      {
+        reqheaders: {
+          'content-type': 'application/vnd.contentful.management.v1+json',
+          'x-contentful-content-type': entry.sys.contentType.sys.id,
+          'x-contentful-version': entry.sys.version.toString(),
+          host: 'api.contentful.com',
+          authorization: 'bearer test'
+        }
+      })
+      .reply(409, 'The version is wrong', responseHeaders)
+
+    const instance = new Publisher({spaceId: 'testspace', accessToken: 'test'})
+    const p = awaitDone(instance)
+
+    // act
+    instance.write(entry)
+
+    // assert
+    try {
+      await p
+      expect.fail(null, null, 'Should have thrown the error')
+    } catch(e) {
+    }
+
+    if (!s.isDone()) {
+      throw new Error(s.pendingMocks().join(','))
+    }
+  })
 
   it('retries on 429 too many requests')
 })
@@ -76,7 +107,7 @@ async function makeEntries(number: number = 1000): Promise<IEntry[]> {
 
   const ret = []
   for(var i = 0; i < number; i++) {
-    ret.push(entries[Math.floor(Math.random() * entries.length)])
+    ret.push(entries[i % entries.length])
   }
   return ret
 }

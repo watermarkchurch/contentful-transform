@@ -20,6 +20,10 @@ const argv = yargs
   .example("$0 -s contentful-export.json -f 'sys.contentType.sys.id==\"foo\"' '_entry.fields.new_field[\"en-US\"]=\"something new\"", "adds a new field to every entry in the given file matching the 'foo' content type")
   .argv
 
+if (!Array.isArray(argv.output)) {
+  argv.output = [argv.output]
+}
+
 Run({
   source: argv.source || '-',
   accessToken: argv.accessToken || process.env['CONTENTFUL_ACCESS_TOKEN'],

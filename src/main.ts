@@ -1,6 +1,7 @@
 import * as Listr from 'listr'
 import {ListrTask} from 'listr'
 import * as fs from 'fs-extra'
+import * as path from 'path'
 import * as JSONStream from 'JSONStream'
 import { Transform, Stream } from 'stream';
 
@@ -18,7 +19,7 @@ export interface ITransformArgs {
   contentType?: string
   query?: string,
   transform: string
-  output?: string
+  output?: string[]
   quiet?: boolean
 }
 
@@ -76,33 +77,23 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     task: pipeIt(TransformStream(args.transform))
   })
 
-  if (args.output && args.output != '-') {
-    context.output = fs.createWriteStream(args.output)
-  } else {
-    context.output = process.stdout
-    // listr logs to stdout
-    args.quiet = true
+  if (args.raw && args.output.indexOf('-') < 0) {
+    args.output.push('-')
   }
 
-  tasks.push({
-    title: 'write output',
-    task: (ctx, task) => {
-      const stringified = 
-        args.raw ?
-          JSONStream.stringify(false) :
-          JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
-      const ret = new Promise<void>((resolve, reject) => {
-        const stream = context.output as Stream;
-
-        stream.on('end', () => {
-          resolve()
-        })
-        stream.on('error', (err) => {
-          console.error('stream error!', err)
-          reject(new Error(err))
-        })
+  args.output.forEach((o) => {
+    if (o == '-') {
+      tasks.push({
+        title: 'write to stdout',
+        task: stringifyTo(process.stdout, true)
       })
-      ctx.stream.pipe(stringified).pipe(context.output)
+      // listr logs to stdout
+      args.quiet = true
+    } else if (path.extname(o) != '') {
+      tasks.push({
+        title: `write to file ${o}`,
+        task: stringifyTo(fs.createWriteStream(o))
+      })
     }
   })
 
@@ -112,4 +103,29 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       renderer: args.quiet ? 'silent' : 'default'
     })
     .run(context)
+
+  function stringifyTo(stream: Stream, isStdout?: boolean): (ctx: any, task: Listr.ListrTaskWrapper) => Promise<void> {
+    return (ctx, task) => {
+      const stringified =
+        args.raw ?
+          JSONStream.stringify(false) :
+          JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
+      const ret = new Promise<void>((resolve, reject) => {
+        let eventSource = stream
+        if (isStdout) {
+          // stdout doesn't have a close event, so listen to the jsonstream
+          eventSource = stringified
+        }
+        eventSource.on('finish', () => {
+          resolve()
+        })
+        eventSource.on('error', (err) => {
+          console.error('stream error!', err)
+          reject(new Error(err))
+        })
+      })
+      ctx.stream.pipe(stringified).pipe(stream)
+      return ret
+    }
+  }
 }

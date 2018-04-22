@@ -21,7 +21,7 @@ export class Publisher extends Writable {
     if (!config.accessToken) {
       throw new Error('No access token given')
     }
-    if (!config.accessToken.startsWith('CFPAT-')) {
+    if (config.accessToken.indexOf('CFPAT-') != 0) {
       throw new Error('The access token must be a management token starting with "CFPAT-"')
     }
     if (!config.spaceId) {

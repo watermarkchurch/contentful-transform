@@ -33,6 +33,26 @@ export class Publisher extends Writable {
     this.doReq(chunk, callback)
   }
 
+  _writev(chunks: { chunk: IEntry, encoding: string}[], callback: (err?: any) => void) {
+    const promises = chunks.map(c => this.writevImpl(c.chunk))
+    Promise.all(promises)
+      .then(() => callback(null))
+      .catch((err) => callback(err))
+  }
+
+  private async writevImpl(chunk: IEntry): Promise<void> {
+    const { host, spaceId, accessToken } = this.config
+
+    return new Promise<void>((resolve, reject) => {
+      this.doReq(chunk, (err, resp) => {
+        if (err) {
+          this.emit('error', err)
+        }
+        resolve()
+      })
+    })
+  }
+
   private doReq(chunk: IEntry, cb: (err: any, resp?: request.Response) => void) {
     const { host, spaceId, accessToken } = this.config
     request.put(`${host}/spaces/${spaceId}/entries/${chunk.sys.id}`, {

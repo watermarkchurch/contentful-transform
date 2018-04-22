@@ -1,4 +1,4 @@
-import { Stream, PassThrough } from "stream";
+import { PassThrough } from "stream";
 import * as request from 'request';
 import * as JSONStream from 'JSONStream';
 
@@ -24,7 +24,7 @@ export class CdnSource {
     }, config)
   }
 
-  stream(contentType?: string, query?: string): Stream {
+  stream(contentType?: string, query?: string): NodeJS.ReadableStream {
     contentType = contentType ? `&content_type=${contentType}` : ''
     query = query ? `&${query}` : ''
     const {host, spaceId, accessToken} = this.config 

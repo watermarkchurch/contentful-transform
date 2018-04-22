@@ -24,10 +24,12 @@
     "@types/nock": "^9.1.3",
     "@types/node": "^9.6.2",
     "@types/request": "^2.47.0",
+    "@types/sinon": "^4.3.1",
     "@types/yargs": "^11.0.0",
     "chai": "^4.1.2",
     "mocha": "^5.0.5",
     "nock": "^9.2.5",
+    "sinon": "^4.5.0",
     "ts-node": "^5.0.1",
     "typescript": "^2.8.1"
   },

@@ -49,7 +49,7 @@ describe('publisher', () => {
         })
         .reply(200, e, responseHeaders)
     })
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'test'})
+    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
     const readable = createReader(entries)
 
     // act
@@ -79,7 +79,7 @@ describe('publisher', () => {
       })
       .reply(409, 'The version is wrong', responseHeaders)
 
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'test'})
+    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
     const p = awaitDone(instance)
 
     // act
@@ -120,7 +120,7 @@ describe('publisher', () => {
         })
         .reply(200, e, responseHeaders)
     })
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'test'})
+    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
     const readable = createReader(entries)
 
     let rateLimitCount = 0;

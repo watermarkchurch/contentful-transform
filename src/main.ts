@@ -10,6 +10,7 @@ import { FilterStream } from './filter';
 import { TransformStream } from './transform';
 import { IEntry } from './model';
 import { CdnSource } from './cdn_source';
+import { Publisher } from './publisher';
 
 export interface ITransformArgs {
   source: string
@@ -94,6 +95,16 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         title: `write to file ${o}`,
         task: stringifyTo(fs.createWriteStream(o))
       })
+    } else {
+      // it's a space ID.  TODO: prompt for confirmation.
+      const publisher = new Publisher({
+        spaceId: o,
+        accessToken: args.accessToken
+      })
+      tasks.push({
+        title: `Reupload to space ${o}`,
+        task: pipeIt(publisher, true)
+      })
     }
   })
 
@@ -110,6 +121,13 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         args.raw ?
           JSONStream.stringify(false) :
           JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
+
+      let bytes = 0.0
+      stringified.on('data', (chunk) => {
+        bytes += chunk.length / 1024.0;
+        task.output = `wrote #${Math.round(bytes)} kb`
+      })
+
       const ret = new Promise<void>((resolve, reject) => {
         let eventSource = stream
         if (isStdout) {
@@ -117,6 +135,11 @@ export default async function Run(args: ITransformArgs): Promise<void> {
           eventSource = stringified
         }
         eventSource.on('finish', () => {
+          task.title += ` (${Math.round(bytes)} kb)`
+          resolve()
+        })
+        eventSource.on('end', () => {
+          task.title += ` (${Math.round(bytes)} kb)`
           resolve()
         })
         eventSource.on('error', (err) => {

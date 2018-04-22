@@ -3,7 +3,7 @@ import { Stream, Writable, Readable } from 'stream';
 
 export type StreamWrapper = (ctx?: any, task?: Listr.ListrTaskWrapper) => Stream
 
-export function pipeIt(taskImpl: Stream | StreamWrapper):
+export function pipeIt(taskImpl: Stream | StreamWrapper, outputTask: boolean = false):
   (ctx: any, task: Listr.ListrTaskWrapper) => Promise<void> {
 
   return (ctx, task) => {
@@ -33,8 +33,9 @@ export function pipeIt(taskImpl: Stream | StreamWrapper):
     })
 
     if (ctx.stream) {
-      ctx.stream = ctx.stream.pipe(stream)
-    } else {
+      ctx.stream.pipe(stream)
+    }
+    if (!outputTask) {
       ctx.stream = stream
     }
     return ret

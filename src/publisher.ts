@@ -21,6 +21,9 @@ export class Publisher extends Writable {
     if (!config.accessToken) {
       throw new Error('No access token given')
     }
+    if (!config.accessToken.startsWith('CFPAT-')) {
+      throw new Error('The access token must be a management token starting with "CFPAT-"')
+    }
     if (!config.spaceId) {
       throw new Error('No space ID given')
     }
@@ -35,7 +38,12 @@ export class Publisher extends Writable {
     this.gateInflightRequests(() => {
       this.doReq(chunk, (err) => {
         this.releaseNextRequest()
-        callback(err)
+        if (err) {
+          this.emit('error', err)
+        } else {
+          this.emit('data', chunk)
+        }
+        callback()
       })
     })
   }
@@ -56,6 +64,8 @@ export class Publisher extends Writable {
           this.releaseNextRequest()
           if (err) {
             this.emit('error', err)
+          } else {
+            this.emit('data', chunk)
           }
           resolve()
         })
@@ -94,7 +104,7 @@ export class Publisher extends Writable {
       headers: {
         'content-type': 'application/vnd.contentful.management.v1+json',
         'x-contentful-content-type': chunk.sys.contentType.sys.id,
-        'x-contentful-version': chunk.sys.version.toString(),
+        'x-contentful-version': (chunk.sys.version - 1).toString(),
       },
       body: JSON.stringify(chunk)
     }, (error, response, body) => {

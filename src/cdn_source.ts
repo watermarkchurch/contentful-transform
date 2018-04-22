@@ -19,6 +19,11 @@ export class CdnSource {
       throw new Error('No space ID given')
     }
 
+    if (config.accessToken.startsWith('CFPAT-') && !config.host) {
+      // for a management token we need to hit api.contentful.com
+      config.host = 'https://api.contentful.com'
+    }
+
     this.config = Object.assign({
       host: 'https://cdn.contentful.com'
     }, config)

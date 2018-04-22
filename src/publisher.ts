@@ -7,6 +7,7 @@ export interface IPublisherConfig {
   host?: string,
   accessToken: string
   spaceId: string
+  maxInflightRequests?: number
 }
 
 export class Publisher extends Writable {
@@ -25,12 +26,18 @@ export class Publisher extends Writable {
     }
 
     this.config = Object.assign({
-      host: 'https://api.contentful.com'
+      host: 'https://api.contentful.com',
+      maxInflightRequests: 4,
     }, config)
   }
 
   _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
-    this.doReq(chunk, callback)
+    this.gateInflightRequests(() => {
+      this.doReq(chunk, (err) => {
+        this.releaseNextRequest()
+        callback(err)
+      })
+    })
   }
 
   _writev(chunks: { chunk: IEntry, encoding: string}[], callback: (err?: any) => void) {
@@ -44,17 +51,42 @@ export class Publisher extends Writable {
     const { host, spaceId, accessToken } = this.config
 
     return new Promise<void>((resolve, reject) => {
-      this.doReq(chunk, (err, resp) => {
-        if (err) {
-          this.emit('error', err)
-        }
-        resolve()
+      this.gateInflightRequests(() => { 
+        this.doReq(chunk, (err, resp) => {
+          this.releaseNextRequest()
+          if (err) {
+            this.emit('error', err)
+          }
+          resolve()
+        })
       })
     })
   }
 
+  private inflight = 0
+  private queue = [] as (() => void)[]
+  private gateInflightRequests(run: () => void) {
+    if (this.inflight == 0 || this.inflight < this.config.maxInflightRequests) {
+      this.inflight++
+      run()
+    } else {
+      this.queue.push(run)
+    }
+  }
+
+  private releaseNextRequest() {
+    if (this.queue.length > 0) {
+      const runner = this.queue.shift()
+      // yield the execution queue before running the next request
+      setTimeout(runner, 0)
+    } else {
+      this.inflight--;
+    }
+  }
+
   private doReq(chunk: IEntry, cb: (err: any, resp?: request.Response) => void) {
     const { host, spaceId, accessToken } = this.config
+
     request.put(`${host}/spaces/${spaceId}/entries/${chunk.sys.id}`, {
       auth: {
         bearer: accessToken
@@ -74,7 +106,7 @@ export class Publisher extends Writable {
           try {
             const reset = response.headers['x-contentful-ratelimit-reset']
             if (reset) {
-              retrySeconds = parseInt(reset.toString())
+              retrySeconds = parseFloat(reset.toString())
             }
           } catch {
             // couldn't parse the header - default wait is 1 second

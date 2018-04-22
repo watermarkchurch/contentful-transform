@@ -64,7 +64,7 @@ export class CdnSource {
           try {
             const reset = resp.headers['x-contentful-ratelimit-reset']
             if (reset) {
-              retrySeconds = parseInt(reset.toString())
+              retrySeconds = parseFloat(reset.toString())
             }
           } catch {
             // couldn't parse the header - default wait is 1 second

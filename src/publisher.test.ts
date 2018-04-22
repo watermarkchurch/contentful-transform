@@ -15,13 +15,15 @@ const responseHeaders = {
 
 describe('publisher', () => {
   let clock: sinon.SinonFakeTimers
-  beforeEach(() => {
+  function useFakeTimers() {
     clock = sinon.useFakeTimers()
-  })
+  }
 
   afterEach(() => {
-    clock.restore()
-    clock = undefined
+    if (clock) {
+      clock.restore()
+      clock = undefined
+    }
   })
 
   const responseHeaders = {
@@ -101,7 +103,7 @@ describe('publisher', () => {
       nock('https://api.contentful.com')
         .put(`/spaces/testspace/entries/${e.sys.id}`)
         .reply(429, null, Object.assign({
-          'X-Contentful-RateLimit-Reset': 10
+          'X-Contentful-RateLimit-Reset': 0.1
         }, responseHeaders))
         
       return nock(`https://api.contentful.com`)
@@ -124,9 +126,7 @@ describe('publisher', () => {
     let rateLimitCount = 0;
     instance.on('ratelimit', (retrySeconds) => {
       rateLimitCount++;
-      expect(retrySeconds).to.eq(10)
-
-      clock.tick(retrySeconds * 1000 + 200)
+      expect(retrySeconds).to.eq(0.1)
     })
 
     // act

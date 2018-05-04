@@ -1,4 +1,4 @@
-import { Writable } from "stream";
+import { Transform } from "stream";
 import { CoreOptions, Response } from "request";
 import { IEntry } from "./model";
 import { DeepPartial } from "./utils";
@@ -9,10 +9,10 @@ export interface IEntryAggregatorConfig {
 
 export type EntryAggregatorClient = { get(uri: string, options?: CoreOptions): Promise<Response> }
 
-export class EntryAggregator extends Writable {
-  private client: EntryAggregatorClient
+export class EntryAggregator extends Transform {
+  public client: EntryAggregatorClient
 
-  private entryMap: { [id: string]: DeepPartial<IEntry> }
+  private entryMap: { [id: string]: DeepPartial<IEntry> } = {}
   
   constructor(config: IEntryAggregatorConfig) {
     super({
@@ -22,9 +22,10 @@ export class EntryAggregator extends Writable {
     this.client = config.client
   }
 
-  _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
+  _transform(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
     // add more fields as necessary
     this.entryMap[chunk.sys.id] = this.selectFields(chunk)
+    this.push(chunk)
     callback()
   }
 

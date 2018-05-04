@@ -4,6 +4,8 @@ import { EventEmitter } from 'events'
 import * as path from 'path'
 import { PassThrough } from 'stream';
 
+// require('request-debug')(request)
+
 export interface IClientConfig {
   host?: string,
   accessToken: string

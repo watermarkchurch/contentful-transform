@@ -46,12 +46,12 @@ export class CdnSource {
         }
       })
       req.on('error', (err) => {
-        ret.emit('error', new Error(`Error making request: ${err}`))
+        ret.emit('error', new Error(`Error getting entries: ${err}`))
       })
       req.on('response', (resp) => {
         status = resp.statusCode
         if (resp.statusCode != 200) {
-          ret.emit('error', new Error(`Error making request: ${resp.statusCode}`))
+          ret.emit('error', new Error(`Error getting entries: ${resp.statusCode}`))
         }
       })
     }

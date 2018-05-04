@@ -3,7 +3,8 @@ import {ListrTask} from 'listr'
 import * as fs from 'fs-extra'
 import * as path from 'path'
 import * as JSONStream from 'JSONStream'
-import { Transform, Stream } from 'stream';
+import { Transform, Stream } from 'stream'
+import chalk from 'chalk'
 
 import { pipeIt } from './utils';
 import { FilterStream } from './filter';
@@ -35,8 +36,10 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   const clients: { [space: string]: Client } = {}
 
   const context = {
-    output: null as fs.WriteStream | NodeJS.WritableStream
   }
+
+  // aggregate all the entries, using the client to hit the source space if we need to
+  const entryInfoMap = new EntryAggregator({})
 
   const contentTypeMap: ContentTypeMap = {}
   let contentTypeGetter = async (id: string) => contentTypeMap[id]
@@ -51,8 +54,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
       task: pipeIt(
         process.stdin
-          .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
+          .pipe(stream)
           .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+          .pipe(entryInfoMap)
       )
     })
   } else {
@@ -65,7 +69,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
       tasks.push({
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
-        task: pipeIt(stream.pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+        task: pipeIt(stream
+          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+          .pipe(entryInfoMap)
         )
       })
     } catch {
@@ -75,6 +81,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   if (tasks.length == 0) {
     const client = getClient(args.source)
     const source = new CdnSource({ client })
+    entryInfoMap.client = client
     contentTypeGetter = async (id: string) => {
       if (contentTypeMap[id]) {
         return contentTypeMap[id]
@@ -88,7 +95,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
     tasks.push({
       title: `Download from space ${args.source}`,
-      task: pipeIt(source.stream(args.contentType, args.query))
+      task: pipeIt(source.stream(args.contentType, args.query)
+        .pipe(entryInfoMap)
+      )
     })
   }
 
@@ -107,16 +116,17 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   if (args.validate) {
-    const entryInfoMap = new EntryAggregator({ client: clients[args.source] })
+    const validator = new ValidatorStream({ 
+      contentTypeGetter,
+      entryInfoGetter: (id) => entryInfoMap.getEntryInfo(id)
+    })
+    validator.on('invalid', (entry: IEntry, errors: string[]) => {      
+      console.error(chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`)
+    })
 
     tasks.push({
       title: 'validate stream',
-      task: pipeIt(entryInfoMap
-        .pipe(new ValidatorStream({ 
-          contentTypeGetter,
-          entryInfoGetter: entryInfoMap.getEntryInfo
-        }))
-      )
+      task: pipeIt(validator)
     })
   }
 

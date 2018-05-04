@@ -8,6 +8,8 @@ import * as sinon from 'sinon'
 import {toReadable, collect} from './utils'
 import {IEntry} from './model'
 import {Publisher} from './publisher'
+import {Client} from './client'
+import { equal } from 'assert';
 
 const responseHeaders = {
   'content-type': 'application/vnd.contentful.delivery.v1+json'
@@ -18,6 +20,12 @@ describe('publisher', () => {
   function useFakeTimers() {
     clock = sinon.useFakeTimers()
   }
+  
+  let client: Client
+
+  beforeEach(() => {
+    client = new Client({spaceId: 'testspace', accessToken: 'CFPAT-test'})
+  })
 
   afterEach(() => {
     if (clock) {
@@ -49,8 +57,13 @@ describe('publisher', () => {
         })
         .reply(200, e, responseHeaders)
     })
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
+    const instance = new Publisher({ client })
     const readable = createReader(entries)
+
+    let published = 0
+    instance.on('data', (chunk) => {
+      published++
+    })
 
     // act
     await awaitDone(readable.pipe(instance))
@@ -61,6 +74,7 @@ describe('publisher', () => {
         throw new Error(s.pendingMocks().join(','))
       }
     })
+    expect(published).to.eq(10)
   })
 
   it('raises error event when entry publish fails', async () => {
@@ -79,7 +93,7 @@ describe('publisher', () => {
       })
       .reply(409, 'The version is wrong', responseHeaders)
 
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
+    const instance = new Publisher({ client })
     const p = awaitDone(instance)
 
     // act
@@ -120,11 +134,11 @@ describe('publisher', () => {
         })
         .reply(200, e, responseHeaders)
     })
-    const instance = new Publisher({spaceId: 'testspace', accessToken: 'CFPAT-test'})
+    const instance = new Publisher({ client })
     const readable = createReader(entries)
 
     let rateLimitCount = 0;
-    instance.on('ratelimit', (retrySeconds) => {
+    client.on('ratelimit', (retrySeconds) => {
       rateLimitCount++;
       expect(retrySeconds).to.eq(0.1)
     })

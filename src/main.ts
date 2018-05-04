@@ -11,6 +11,7 @@ import { TransformStream } from './transform';
 import { IEntry } from './model';
 import { CdnSource } from './cdn_source';
 import { Publisher } from './publisher';
+import { Client } from './client';
 
 export interface ITransformArgs {
   source: string
@@ -26,6 +27,7 @@ export interface ITransformArgs {
 
 export default async function Run(args: ITransformArgs): Promise<void> {
   const tasks: Array<ListrTask> = []
+  const clients: { [space: string]: Client } = {}
 
   const context = {
     output: null as fs.WriteStream | NodeJS.WritableStream
@@ -97,10 +99,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       })
     } else {
       // it's a space ID.  TODO: prompt for confirmation.
-      const publisher = new Publisher({
-        spaceId: o,
-        accessToken: args.accessToken
-      })
+      const publisher = new Publisher({ client: getClient(o) })
       tasks.push({
         title: `Reupload to space ${o}`,
         task: pipeIt(publisher, true)
@@ -115,18 +114,23 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     })
     .run(context)
 
-  function stringifyTo(stream: Stream, isStdout?: boolean): (ctx: any, task: Listr.ListrTaskWrapper) => Promise<void> {
+  function getClient(spaceId: string): Client {
+    let client = clients[spaceId]
+    if (client) {
+      return client
+    }
+    return clients[spaceId] = new Client({
+      spaceId,
+      accessToken: args.accessToken
+    })
+  }
+
+  function stringifyTo(stream: NodeJS.WritableStream, isStdout?: boolean): (ctx: any, task: Listr.ListrTaskWrapper) => Promise<void> {
     return (ctx, task) => {
       const stringified =
         args.raw ?
           JSONStream.stringify(false) :
           JSONStream.stringify('{\n  "entries": [\n    ', ',\n    ', '\n  ]\n}\n')
-
-      let bytes = 0.0
-      stringified.on('data', (chunk) => {
-        bytes += chunk.length / 1024.0;
-        task.output = `wrote #${Math.round(bytes)} kb`
-      })
 
       const ret = new Promise<void>((resolve, reject) => {
         let eventSource = stream
@@ -148,6 +152,13 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         })
       })
       ctx.stream.pipe(stringified).pipe(stream)
+
+      let bytes = 0.0
+      stringified.on('data', (chunk) => {
+        bytes += chunk.length / 1024.0;
+        task.output = `wrote #${Math.round(bytes)} kb`
+      })
+
       return ret
     }
   }

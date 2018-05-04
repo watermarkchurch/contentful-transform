@@ -8,10 +8,11 @@ import { Transform, Stream } from 'stream';
 import { pipeIt } from './utils';
 import { FilterStream } from './filter';
 import { TransformStream } from './transform';
-import { IEntry } from './model';
+import { IEntry, IContentType } from './model';
 import { CdnSource } from './cdn_source';
 import { Publisher } from './publisher';
 import { Client } from './client';
+import { ValidatorStream } from './validator';
 
 export interface ITransformArgs {
   source: string
@@ -22,8 +23,11 @@ export interface ITransformArgs {
   query?: string,
   transform: string
   output?: string[]
+  validate?: boolean
   quiet?: boolean
 }
+
+type ContentTypeMap = { [id: string]: IContentType }
 
 export default async function Run(args: ITransformArgs): Promise<void> {
   const tasks: Array<ListrTask> = []
@@ -33,7 +37,15 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     output: null as fs.WriteStream | NodeJS.WritableStream
   }
 
+  const contentTypeMap: ContentTypeMap = {}
+  let contentTypeGetter = async (id: string) => contentTypeMap[id]
+
   if (args.source == '-') {
+    const stream = fs.createReadStream(args.source)
+      .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
+
+    parseInto(contentTypeMap, stream)
+
     tasks.push({
       title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
       task: pipeIt(
@@ -45,12 +57,14 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   } else {
     try {
       await fs.access(args.source, fs.constants.R_OK)
+      const stream = fs.createReadStream(args.source)
+        .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
+
+      parseInto(contentTypeMap, stream)
+
       tasks.push({
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
-        task: pipeIt(
-          fs.createReadStream(args.source)
-          .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
-          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+        task: pipeIt(stream.pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
         )
       })
     } catch {
@@ -58,7 +72,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   if (tasks.length == 0) {
-    const source = new CdnSource({ client: getClient(args.source) })
+    const client = getClient(args.source)
+    const source = new CdnSource({ client })
+    contentTypeGetter = async (id: string) => {
+      if (contentTypeMap[id]) {
+        return contentTypeMap[id]
+      }
+      const resp = await client.get(`/content_types/${id}`)
+      if (resp.statusCode != 200) {
+        throw new Error(`${resp.statusCode} getting content type ${id}:\n  ${resp.body}`)
+      }
+      return contentTypeMap[id] = JSON.parse(resp.body)
+    }
+
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(source.stream(args.contentType, args.query))
@@ -72,10 +98,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     })
   }
 
-  tasks.push({
-    title: 'transform stream',
-    task: pipeIt(TransformStream(args.transform))
-  })
+  if (args.transform && args.transform != '') {
+    tasks.push({
+      title: 'transform stream',
+      task: pipeIt(TransformStream(args.transform))
+    })
+  }
+
+  if (args.validate) {
+    tasks.push({
+      title: 'validate stream',
+      task: pipeIt(new ValidatorStream({ contentTypeGetter }))
+    })
+  }
 
   if (args.raw && args.output.indexOf('-') < 0) {
     args.output.push('-')
@@ -159,4 +194,16 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       return ret
     }
   }
+}
+
+function parseInto(contentTypes: ContentTypeMap, jsonStream: NodeJS.ReadableStream): void {
+  jsonStream.on('data', (ct) => {
+    if (isContentType(ct)) {
+      contentTypes[ct.sys.id] = ct
+    }
+  })
+}
+
+function isContentType(json: any): json is IContentType {
+  return json.sys && json.sys.type == 'ContentType'
 }

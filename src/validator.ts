@@ -68,7 +68,7 @@ function validateField(id: string, validation: IValidation, field: any): string 
     if (typeof(field) !== 'string') {
       return `${id} expected to be a string but was ${typeof(field)}`
     } else {
-      if (!field.match(new RegExp(validation.regexp.pattern, validation.regexp.flags))) {
+      if (!field.match(new RegExp(validation.regexp.pattern, validation.regexp.flags || ''))) {
         return `${id} expected to match /${validation.regexp.pattern}/${validation.regexp.flags} but was ${field}`
       }
     }

@@ -36,7 +36,7 @@ export class Client extends EventEmitter {
     }, config)
   }
 
-  get(uri: string, options?: CoreOptions): NodeJS.ReadableStream {
+  stream(uri: string, options?: CoreOptions): NodeJS.ReadableStream {
     const ret = new PassThrough()
 
     this._doReq((cb) => {
@@ -72,6 +72,23 @@ export class Client extends EventEmitter {
     })
 
     return ret
+  }
+
+  async get(uri: string, options?: CoreOptions): Promise<Response> {
+    return new Promise<Response>((resolve, reject) => {
+      this._doReq(cb => 
+        request.get(
+          this.getUrl(uri),
+          this.getOptions(options),
+          cb),
+        (error, response) => {
+          if (error) {
+            reject(error)
+          } else {
+            resolve(response)
+          }
+        })
+    })
   }
 
   async put(uri: string, options?: CoreOptions): Promise<Response> {

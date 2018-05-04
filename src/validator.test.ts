@@ -88,7 +88,8 @@ describe('validator', () => {
       validations: [
         {
           regexp: {
-            pattern: '^\/'
+            pattern: '^\/',
+            flags: null
           }
         }
       ]

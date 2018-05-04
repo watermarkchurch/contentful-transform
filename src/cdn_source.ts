@@ -6,7 +6,7 @@ export interface ICdnConfig {
   client: CdnSourceClient
 }
 
-export type CdnSourceClient = { get(url: string): NodeJS.ReadableStream }
+export type CdnSourceClient = { stream(url: string): NodeJS.ReadableStream }
 
 export class CdnSource {
   private client: CdnSourceClient
@@ -27,7 +27,7 @@ export class CdnSource {
   
     
     const makeReq = (skip: number) => {
-      const req = this.client.get(`/entries?limit=1000&skip=${skip}&locale=*${contentType}${query}`)
+      const req = this.client.stream(`/entries?limit=1000&skip=${skip}&locale=*${contentType}${query}`)
 
       req.pipe(ret, { end: false })
 

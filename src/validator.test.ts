@@ -2,8 +2,8 @@ import {Readable, Writable, Stream, PassThrough} from 'stream'
 import { expect } from 'chai';
 
 import { ValidatorStream } from './validator'
-import {toReadable, collect} from './utils'
-import { IContentType, IValidation } from './model'
+import {toReadable, collect, DeepPartial} from './utils'
+import { IContentType, IValidation, IEntry } from './model'
 import { watchFile } from 'fs';
 
 describe('validator', () => {
@@ -266,7 +266,134 @@ describe('validator', () => {
     })
   
     describe('linkContentType', () => {
-      it('expects linked values content type to be in')
+      it('expects value to be a link object', async () => {
+        const validation: IValidation = {
+          linkContentType: [
+            'foo'
+          ]
+        }
+
+        const instance = new ValidatorStream({
+          contentTypeGetter: async () => null
+        })
+  
+        const result = await instance.validateField('test', validation, 'some string')
+  
+        expect(result).to.equal('test expected to be a link to an entry but was a string')
+      })
+
+      it('expects value to be a link to an entry', async () => {
+        const validation: IValidation = {
+          linkContentType: [
+            'foo'
+          ]
+        }
+
+        const instance = new ValidatorStream({ 
+          contentTypeGetter: async () => null
+        })
+  
+        const result = await instance.validateField('test', validation, {
+          sys: {
+            type: 'Link',
+            linkType: 'Asset',
+            id: 'abcd1xab'
+          }
+        })
+  
+        expect(result).to.equal('test expected to be a link to an entry but was a Asset')
+      })
+
+      it('expects value to not be a broken link', async () => {
+        const validation: IValidation = {
+          linkContentType: [
+            'foo'
+          ]
+        }
+
+        const instance = new ValidatorStream({ 
+          contentTypeGetter: async () => null,
+          entryInfoGetter: async (id) => null
+        })
+  
+        const result = await instance.validateField('test', validation, {
+          sys: {
+            type: 'Link',
+            linkType: 'Entry',
+            id: 'abcd1xab'
+          }
+        })
+  
+        expect(result).to.equal('test is a broken link!')
+      })
+
+      it('expects value\'s content type to be in the array', async () => {
+        const validation: IValidation = {
+          linkContentType: [
+            'foo',
+            'foo2'
+          ]
+        }
+
+        const linked: DeepPartial<IEntry> = {
+          sys: {
+            contentType: {
+              sys: {
+                id: 'bar'
+              }
+            }
+          }
+        }
+        const getter = async (id) => linked
+        const instance = new ValidatorStream({ 
+          contentTypeGetter: async () => null,
+          entryInfoGetter: getter
+        })
+  
+        const result = await instance.validateField('test', validation, {
+          sys: {
+            type: 'Link',
+            linkType: 'Entry',
+            id: 'abcd1xab'
+          }
+        })
+  
+        expect(result).to.equal('test expected to link to one of [foo,foo2] but was a bar')
+      })
+
+      it('succeeds when all matching', async () => {
+        const validation: IValidation = {
+          linkContentType: [
+            'foo',
+            'foo2'
+          ]
+        }
+
+        const linked: DeepPartial<IEntry> = {
+          sys: {
+            contentType: {
+              sys: {
+                id: 'foo2'
+              }
+            }
+          }
+        }
+        const getter = async (id) => linked
+        const instance = new ValidatorStream({ 
+          contentTypeGetter: async () => null,
+          entryInfoGetter: getter
+        })
+  
+        const result = await instance.validateField('test', validation, {
+          sys: {
+            type: 'Link',
+            linkType: 'Entry',
+            id: 'abcd1xab'
+          }
+        })
+  
+        expect(result).to.be.null
+      })
     })
   })
 })

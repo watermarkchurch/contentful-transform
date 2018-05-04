@@ -13,6 +13,7 @@ import { CdnSource } from './cdn_source';
 import { Publisher } from './publisher';
 import { Client } from './client';
 import { ValidatorStream } from './validator';
+import { EntryAggregator } from './entry_aggregator';
 
 export interface ITransformArgs {
   source: string
@@ -39,7 +40,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
   const contentTypeMap: ContentTypeMap = {}
   let contentTypeGetter = async (id: string) => contentTypeMap[id]
-
+  
   if (args.source == '-') {
     const stream = fs.createReadStream(args.source)
       .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
@@ -106,9 +107,16 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   if (args.validate) {
+    const entryInfoMap = new EntryAggregator({ client: clients[args.source] })
+
     tasks.push({
       title: 'validate stream',
-      task: pipeIt(new ValidatorStream({ contentTypeGetter }))
+      task: pipeIt(entryInfoMap
+        .pipe(new ValidatorStream({ 
+          contentTypeGetter,
+          entryInfoGetter: entryInfoMap.getEntryInfo
+        }))
+      )
     })
   }
 

@@ -15,7 +15,11 @@ export interface IEntry {
     publishedVersion: number,
     firstPublishedAt: string,
     publishedAt: string,
-    contentType: { sys: any } 
+    contentType: { sys: {
+      type: "Link",
+      linkType: "ContentType",
+      id: string
+    } } 
  },
  fields: {
   [name: string]: {

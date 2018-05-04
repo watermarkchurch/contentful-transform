@@ -1,5 +1,5 @@
 import { Transform } from "stream";
-import { IEntry, IContentType, IValidation } from "./model";
+import { IEntry, IContentType, IValidation, IField } from "./model";
 import {} from './utils'
 
 export interface IValidatorStreamConfig {
@@ -48,9 +48,16 @@ export class ValidatorStream extends Transform {
         }
       }
 
-      if(field && fieldDef.validations) {
+      if (!field) {
+        return null
+      }
+
+      if(fieldDef.validations) {
         return fieldDef.validations
           .map(v => validateField(fieldDef.id, v, field['en-US']))          
+      }
+      if (fieldDef.type == 'Array') {
+        return validateArray(fieldDef, field['en-US'])
       }
       return null
     }).filter(e => e)
@@ -69,9 +76,35 @@ function validateField(id: string, validation: IValidation, field: any): string 
       return `${id} expected to be a string but was ${typeof(field)}`
     } else {
       if (!field.match(new RegExp(validation.regexp.pattern, validation.regexp.flags || ''))) {
-        return `${id} expected to match /${validation.regexp.pattern}/${validation.regexp.flags} but was ${field}`
+        return `${id} expected to match /${validation.regexp.pattern}/${validation.regexp.flags || ''} but was ${field}`
       }
+    }
+  } else if (validation.in) {
+    if (validation.in.indexOf(field) == -1) {
+      return `${id} expected to be in [${validation.in}] but was ${field}`
     }
   }
   return null
+}
+
+function validateArray(fieldDef: IField, field: any): string[] {
+  if (!Array.isArray(field)) {
+    return [`${fieldDef.id} expected to be an array but was ${typeof(field)}`]
+  }
+
+  if (fieldDef.required) {
+    if (field.length == 0) {
+      return [`${fieldDef.id} is required but was empty`]
+    }
+  }
+
+  if (!fieldDef.items.validations || fieldDef.items.validations.length == 0) {
+    return null
+  }
+
+  return field.flatMap((item, index) => 
+    fieldDef.items.validations.map((v) => 
+      validateField(fieldDef.id + '[' + index + ']', v, item)
+    )
+  )
 }

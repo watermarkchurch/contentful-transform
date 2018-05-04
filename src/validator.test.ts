@@ -119,6 +119,90 @@ describe('validator', () => {
 
     // assert
     expect(errors.length).to.equal(1)
+    expect(errors[0].entry.sys.id).to.equal('test1')
+    expect(errors[0].err[0]).to.equal('slug expected to match /^\// but was #test1')
+  })
+
+  it('validates presence of required attributes', async () => {
+    const page = makeContentType('page')
+    page.fields.push({
+      id: 'slug',
+      name: 'Slug',
+      type: 'Symbol',
+      required: true
+    })
+
+    const instance = new ValidatorStream({ contentTypeGetter: async () => page })
+
+    const entries = [
+      {
+        sys: { id: 'test1', contentType: { sys: { id: 'page' }} },
+        fields: { 
+          name: { 'en-US': 'test1' }
+        }
+      }
+    ]
+
+    // act
+    const stream = toReadable(entries).pipe(instance)
+
+    let errors = []
+    instance.on('invalid', (entry, err) => {
+      errors.push({ entry, err })
+    })
+
+    const result = await collect(stream)
+
+    // assert
+    expect(errors.length).to.equal(1)
+    expect(errors[0].entry.sys.id).to.equal('test1')
+    expect(errors[0].err[0]).to.equal('missing required field slug')
+
+    expect(result.length).to.equal(0)
+  })
+
+  it('validates array fields', async () => {
+    const page = makeContentType('page')
+    page.fields.push({
+      id: 'states',
+      name: 'States',
+      type: 'Array',
+      items: {
+        type: 'Number',
+        validations: [
+          { in: [0, 1, 2] }
+        ]
+      }
+    })
+
+    const instance = new ValidatorStream({ contentTypeGetter: async () => page })
+
+    const entries = [
+      {
+        sys: { id: 'test1', contentType: { sys: { id: 'page' }} },
+        fields: { 
+          name: { 'en-US': 'test1' },
+          states: { 'en-US': [ 1, 9 ] }
+        }
+      }
+    ]
+
+    // act
+    const stream = toReadable(entries).pipe(instance)
+
+    let errors = []
+    instance.on('invalid', (entry, err) => {
+      errors.push({ entry, err })
+    })
+
+    const result = await collect(stream)
+
+    // assert
+    expect(errors.length).to.equal(1)
+    expect(errors[0].entry.sys.id).to.equal('test1')
+    expect(errors[0].err[0]).to.equal('states[1] expected to be in [0,1,2] but was 9')
+
+    expect(result.length).to.equal(0)
   })
 })
 

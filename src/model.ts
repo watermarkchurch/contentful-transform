@@ -90,7 +90,7 @@ export interface IField {
   items?: {
     type: FieldType,
     validations: IValidation[],
-    linkType: 'Entry' | 'Asset',
+    linkType?: 'Entry' | 'Asset',
   }
 }
 

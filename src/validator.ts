@@ -40,71 +40,76 @@ export class ValidatorStream extends Transform {
     }
 
     // check the validations against each field
-    let errors = contentType.fields.flatMap(fieldDef => {
-      const field = chunk.fields[fieldDef.id]
-      if (fieldDef.required) {
-        if (!field) {
-          return [`missing required field ${fieldDef.id}`]
+    const promises = 
+      contentType.fields.flatMap<Promise<string>>(fieldDef => {
+        const field = chunk.fields[fieldDef.id]
+        if (fieldDef.required) {
+          if (!field) {
+            return [Promise.resolve(`missing required field ${fieldDef.id}`)]
+          }
         }
-      }
 
-      if (!field) {
-        return null
-      }
+        if (!field) {
+          return
+        }
 
-      if(fieldDef.validations) {
-        return fieldDef.validations
-          .map(v => validateField(fieldDef.id, v, field['en-US']))          
-      }
-      if (fieldDef.type == 'Array') {
-        return validateArray(fieldDef, field['en-US'])
-      }
-      return null
-    }).filter(e => e)
+        if(fieldDef.validations) {
+          return fieldDef.validations
+            .map(v => this.validateField(fieldDef.id, v, field['en-US']))
+        }
+        if (fieldDef.type == 'Array') {
+          return this.validateArray(fieldDef, field['en-US'])
+        }
+        return
+      })
+    
+    const errors = (await Promise.all(promises)).filter(e => e)
 
     if (errors.length > 0) {
-      console.log('emit event')
+      console.log('errors', errors)
       this.emit('invalid', chunk, errors)
     }
     return errors.length == 0
   }
-}
 
-function validateField(id: string, validation: IValidation, field: any): string {
-  if (validation.regexp) {
-    if (typeof(field) !== 'string') {
-      return `${id} expected to be a string but was ${typeof(field)}`
-    } else {
-      if (!field.match(new RegExp(validation.regexp.pattern, validation.regexp.flags || ''))) {
-        return `${id} expected to match /${validation.regexp.pattern}/${validation.regexp.flags || ''} but was ${field}`
+  async validateField(id: string, validation: IValidation, field: any): Promise<string> {
+    if (validation.regexp) {
+      if (typeof(field) !== 'string') {
+        return `${id} expected to be a string but was ${typeof(field)}`
+      } else {
+        if (!field.match(new RegExp(validation.regexp.pattern, validation.regexp.flags || ''))) {
+          console.log('returning error')
+          return `${id} expected to match /${validation.regexp.pattern}/${validation.regexp.flags || ''} but was ${field}`
+        }
+      }
+  
+    } else if (validation.in) {
+      if (validation.in.indexOf(field) == -1) {
+        return `${id} expected to be in [${validation.in}] but was ${field}`
       }
     }
-  } else if (validation.in) {
-    if (validation.in.indexOf(field) == -1) {
-      return `${id} expected to be in [${validation.in}] but was ${field}`
-    }
-  }
-  return null
-}
-
-function validateArray(fieldDef: IField, field: any): string[] {
-  if (!Array.isArray(field)) {
-    return [`${fieldDef.id} expected to be an array but was ${typeof(field)}`]
-  }
-
-  if (fieldDef.required) {
-    if (field.length == 0) {
-      return [`${fieldDef.id} is required but was empty`]
-    }
-  }
-
-  if (!fieldDef.items.validations || fieldDef.items.validations.length == 0) {
     return null
   }
+  
+  validateArray(fieldDef: IField, field: any): Promise<string>[] {
+    if (!Array.isArray(field)) {
+      return [Promise.resolve(`${fieldDef.id} expected to be an array but was ${typeof(field)}`)]
+    }
+  
+    if (fieldDef.required) {
+      if (field.length == 0) {
+        return [Promise.resolve(`${fieldDef.id} is required but was empty`)]
+      }
+    }
+  
+    if (!fieldDef.items.validations || fieldDef.items.validations.length == 0) {
+      return null
+    }
 
-  return field.flatMap((item, index) => 
-    fieldDef.items.validations.map((v) => 
-      validateField(fieldDef.id + '[' + index + ']', v, item)
-    )
-  )
+    return field.flatMap((item, index) => 
+        fieldDef.items.validations.map((v) => 
+          this.validateField(fieldDef.id + '[' + index + ']', v, item)
+        )
+      )
+  }
 }

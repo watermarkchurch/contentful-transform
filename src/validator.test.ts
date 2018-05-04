@@ -2,8 +2,8 @@ import {Readable, Writable, Stream, PassThrough} from 'stream'
 import { expect } from 'chai';
 
 import { ValidatorStream } from './validator'
-import {toReadable, collect, wait} from './utils'
-import { IContentType } from './model'
+import {toReadable, collect} from './utils'
+import { IContentType, IValidation } from './model'
 import { watchFile } from 'fs';
 
 describe('validator', () => {
@@ -203,6 +203,71 @@ describe('validator', () => {
     expect(errors[0].err[0]).to.equal('states[1] expected to be in [0,1,2] but was 9')
 
     expect(result.length).to.equal(0)
+  })
+
+  describe('validateField', () => {
+    let instance: ValidatorStream
+    beforeEach(() => {
+      instance = new ValidatorStream({ contentTypeGetter: async () => null })
+    })
+
+    describe('regexp', () => {
+      it('expects field to be a string', async () => {
+        const validation: IValidation = {
+          regexp: { pattern: '\d+' }
+        }
+  
+        const result = await instance.validateField('test', validation, 1)
+  
+        expect(result).to.equal('test expected to be a string but was number')
+      })
+  
+      it('expects field to match the pattern', async () => {
+        const validation: IValidation = {
+          regexp: { pattern: '\\d+' }
+        }
+  
+        const result = await instance.validateField('test', validation, 'asdf')
+  
+        expect(result).to.equal('test expected to match /\\d+/ but was asdf')
+      })
+  
+      it('succeeds when matching', async () => {
+        const validation: IValidation = {
+          regexp: { pattern: '[a-z]+', flags: 'i' }
+        }
+  
+        const result = await instance.validateField('test', validation, 'asDf')
+  
+        expect(result).to.be.null
+      })
+    })
+  
+    describe('in', () => {
+      it('expects to find value in array', async () => {
+        const validation: IValidation = {
+          in: [ 'a', 'b', 'c' ]
+        }
+  
+        const result = await instance.validateField('test', validation, 'qwerty')
+  
+        expect(result).to.equal("test expected to be in [a,b,c] but was qwerty")
+      })
+  
+      it('succeeds when matching', async () => {
+        const validation: IValidation = {
+          in: [ 'a', 'b', 'qwerty' ]
+        }
+  
+        const result = await instance.validateField('test', validation, 'qwerty')
+  
+        expect(result).to.be.null
+      })
+    })
+  
+    describe('linkContentType', () => {
+      it('expects linked values content type to be in')
+    })
   })
 })
 

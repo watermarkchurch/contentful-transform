@@ -58,10 +58,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   if (tasks.length == 0) {
-    const source = new CdnSource({
-      spaceId: args.source,
-      accessToken: args.accessToken
-    })
+    const source = new CdnSource({ client: getClient(args.source) })
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(source.stream(args.contentType, args.query))

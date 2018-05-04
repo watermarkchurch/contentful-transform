@@ -2,6 +2,7 @@ import * as request from 'request'
 import { CoreOptions, RequestCallback, Response } from 'request'
 import { EventEmitter } from 'events'
 import * as path from 'path'
+import { PassThrough } from 'stream';
 
 export interface IClientConfig {
   host?: string,
@@ -26,10 +27,51 @@ export class Client extends EventEmitter {
       throw new Error('No space ID given')
     }
     
+    const host = config.accessToken.startsWith('CFPAT-') ? 
+      'https://api.contentful.com' :
+      'https://cdn.contentful.com'
     this.config = Object.assign({
-      host: 'https://api.contentful.com',
+      host,
       maxInflightRequests: 4,
     }, config)
+  }
+
+  get(uri: string, options?: CoreOptions): NodeJS.ReadableStream {
+    const ret = new PassThrough()
+
+    this._doReq((cb) => {
+      let response: Response
+      let error: any
+
+      const req = request.get(
+          this.getUrl(uri),
+          this.getOptions(options)
+        )
+
+      // stream the request
+      req.pipe(ret, { end: false })
+
+      // pass the request back through to the rate limit logic
+      req.on('response', (resp) => response = resp)
+      req.on('error', (err) => {
+        error = err
+        cb(err, response, undefined)
+      })
+      req.once('end', () => {
+        if (!error) {
+          cb(undefined, response, undefined)
+        }
+      })
+    }, (err, response) => {
+      // done after rate limiting - propagate end event to the child stream
+      ret.emit('response', response)
+      if (err) {
+        ret.emit('error', err)
+      }
+      ret.emit('end')
+    })
+
+    return ret
   }
 
   async put(uri: string, options?: CoreOptions): Promise<Response> {

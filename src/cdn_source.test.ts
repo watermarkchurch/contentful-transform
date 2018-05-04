@@ -8,6 +8,7 @@ import * as sinon from 'sinon'
 import {toReadable, collect} from './utils'
 import {IEntry} from './model'
 import {CdnSource} from './cdn_source'
+import { Client } from './client';
 
 const responseHeaders = {
   'content-type': 'application/vnd.contentful.delivery.v1+json'
@@ -15,7 +16,10 @@ const responseHeaders = {
 
 describe('cdn_source', () => {
   let clock: sinon.SinonFakeTimers
+  let client: Client
+
   beforeEach(() => {
+    client = new Client({host: 'https://cdn.contentful.com', spaceId: 'testspace', accessToken: 'CFPAT-test'})
     clock = sinon.useFakeTimers()
   })
 
@@ -38,7 +42,7 @@ describe('cdn_source', () => {
       },
       responseHeaders);
     
-    const instance = new CdnSource({spaceId: 'testspace', accessToken: 'test'}) 
+    const instance = new CdnSource({ client }) 
 
     // act
     const stream = instance.stream()
@@ -74,7 +78,7 @@ describe('cdn_source', () => {
       },
       responseHeaders);
     
-    const instance = new CdnSource({spaceId: 'testspace', accessToken: 'test'}) 
+    const instance = new CdnSource({ client }) 
 
     // act
     const stream = instance.stream()
@@ -105,7 +109,7 @@ describe('cdn_source', () => {
       },
       responseHeaders);
     
-    const instance = new CdnSource({spaceId: 'testspace', accessToken: 'test'}) 
+    const instance = new CdnSource({ client }) 
 
     // act
     const stream = instance.stream()
@@ -151,7 +155,7 @@ describe('cdn_source', () => {
       },
       responseHeaders);
     
-    const instance = new CdnSource({spaceId: 'testspace', accessToken: 'test'}) 
+    const instance = new CdnSource({ client }) 
 
     // act
     const stream = instance.stream()
@@ -163,7 +167,7 @@ describe('cdn_source', () => {
       count++;
     })
     let rateLimitCount = 0;
-    stream.on('ratelimit', (retrySeconds) => {
+    client.on('ratelimit', (retrySeconds) => {
       rateLimitCount++;
       expect(count).to.eq(1000)
       expect(retrySeconds).to.eq(900)

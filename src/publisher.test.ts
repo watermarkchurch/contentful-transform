@@ -24,7 +24,7 @@ describe('publisher', () => {
   let client: Client
 
   beforeEach(() => {
-    client = new Client({spaceId: 'testspace', accessToken: 'CFPAT-test'})
+    client = new Client({host: 'https://api.contentful.com', spaceId: 'testspace', accessToken: 'CFPAT-test'})
   })
 
   afterEach(() => {

@@ -55,7 +55,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       task: pipeIt(
         process.stdin
           .pipe(stream)
-          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+          .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
           .pipe(entryInfoMap)
       )
     })
@@ -70,7 +70,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       tasks.push({
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
         task: pipeIt(stream
-          .pipe(FilterStream((e) =>  e.sys && e.sys.type == 'Entry'))
+          .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
           .pipe(entryInfoMap)
         )
       })
@@ -96,6 +96,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(source.stream(args.contentType, args.query)
+        .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
         .pipe(entryInfoMap)
       )
     })
@@ -115,13 +116,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     })
   }
 
+  const errorMessages: string[] = []
   if (args.validate) {
     const validator = new ValidatorStream({ 
       contentTypeGetter,
       entryInfoGetter: (id) => entryInfoMap.getEntryInfo(id)
     })
-    validator.on('invalid', (entry: IEntry, errors: string[]) => {      
-      console.error(chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`)
+    validator.on('invalid', (entry: IEntry, errors: string[]) => {  
+      const msg = chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`
+      if (args.quiet) {
+        console.error(msg)
+      } else {
+        errorMessages.push(msg)
+      }
     })
 
     tasks.push({
@@ -163,6 +170,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       renderer: args.quiet ? 'silent' : 'default'
     })
     .run(context)
+    .then(() => {
+      errorMessages.forEach(msg => console.error(msg))
+    })
 
   function getClient(spaceId: string): Client {
     let client = clients[spaceId]

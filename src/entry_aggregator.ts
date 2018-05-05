@@ -12,7 +12,7 @@ export type EntryAggregatorClient = { get(uri: string, options?: CoreOptions): P
 export class EntryAggregator extends Transform {
   public client: EntryAggregatorClient
 
-  private entryMap: { [id: string]: DeepPartial<IEntry> } = {}
+  public entryMap: { [id: string]: DeepPartial<IEntry> } = {}
   
   constructor(config: IEntryAggregatorConfig) {
     super({
@@ -44,7 +44,7 @@ export class EntryAggregator extends Transform {
       }
 
       const chunk: IEntry = JSON.parse(resp.body)
-      this.entryMap[chunk.sys.id] = this.selectFields(chunk)
+      return this.entryMap[chunk.sys.id] = this.selectFields(chunk)
     } else {
       // TODO: put this request in a queue and resolve it when the entry comes through the _write
       throw new Error(`Entry ${id} has not yet been processed and I don't have an access token to go get it.`)      

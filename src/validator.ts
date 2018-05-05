@@ -92,6 +92,39 @@ export class ValidatorStream extends Transform {
         }
         return
       })
+
+    // check for broken links
+    if (this.config.contentTypeGetter) {
+      promises.push(...contentType.fields
+        .filter(f => f.required && f.linkType == 'Entry')
+        .map(async fieldDef => {
+          const field = chunk.fields[fieldDef.id]
+          if (!field) {
+            return
+          }
+
+          const entryInfo = await this.config.entryInfoGetter(field['en-US'].sys.id)
+          if (!entryInfo) {
+            return `${fieldDef.id} is a broken link!`
+          }
+      }))
+
+      promises.push(...contentType.fields
+        .filter(f => f.required && f.type == 'Array' && f.items.linkType == 'Entry')
+        .flatMap(fieldDef => {
+          const array = chunk.fields[fieldDef.id]
+          if (!array) {
+            return
+          }
+
+          return (array['en-US'] as any[]).map(async (field) => {
+            const entryInfo = await this.config.entryInfoGetter(field.sys.id)
+            if (!entryInfo) {
+              return `${fieldDef.id} has a broken link!`
+            }
+          })
+      }))
+    }
     
     const errors = (await Promise.all(promises)).filter(e => e)
 
@@ -136,7 +169,8 @@ export class ValidatorStream extends Transform {
 
       const entryInfo = await this.config.entryInfoGetter(field.sys.id)
       if (!entryInfo) {
-        return `${id} is a broken link!`
+        // validation message added above
+        return
       }
       if (validation.linkContentType.indexOf(entryInfo.sys.contentType.sys.id) == -1) {
         return `${id} expected to link to one of [${validation.linkContentType}] but was a ${entryInfo.sys.contentType.sys.id}`

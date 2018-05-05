@@ -97,7 +97,7 @@ export interface IField {
   linkType?: 'Entry' | 'Asset',
   items?: {
     type: FieldType,
-    validations: IValidation[],
+    validations?: IValidation[],
     linkType?: 'Entry' | 'Asset',
   }
 }

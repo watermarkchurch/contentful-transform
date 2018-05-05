@@ -161,6 +161,103 @@ describe('validator', () => {
     expect(result.length).to.equal(0)
   })
 
+  it('validates a broken link', async () => {
+    const page = makeContentType('page')
+    page.fields.push({
+      id: 'author',
+      name: 'Author',
+      type: 'Link',
+      linkType: 'Entry',
+      required: true
+    })
+
+    const instance = new ValidatorStream({ 
+      contentTypeGetter: async () => page,
+      entryInfoGetter: async () => null
+    })
+
+    const entries = [
+      {
+        sys: { id: 'test1', contentType: { sys: { id: 'page' }} },
+        fields: { 
+          name: { 'en-US': 'test1' },
+          author: { 'en-US': {
+            sys: {
+              id: 'test2'
+            }
+          } }
+        }
+      }
+    ]
+
+    // act
+    const stream = toReadable(entries).pipe(instance)
+
+    let errors = []
+    instance.on('invalid', (entry, err) => {
+      errors.push({ entry, err })
+    })
+
+    const result = await collect(stream)
+
+    // assert
+    expect(errors.length).to.equal(1)
+    expect(errors[0].entry.sys.id).to.equal('test1')
+    expect(errors[0].err[0]).to.equal('author is a broken link!')
+
+    expect(result.length).to.equal(0)
+  })
+
+  it('validates a broken link in an array', async () => {
+    const page = makeContentType('page')
+    page.fields.push({
+      id: 'author',
+      name: 'Author',
+      type: 'Array',
+      required: true,
+      items: {
+        type: 'Link',
+        linkType: 'Entry'
+      }
+    })
+
+    const instance = new ValidatorStream({ 
+      contentTypeGetter: async () => page,
+      entryInfoGetter: async () => null
+    })
+
+    const entries = [
+      {
+        sys: { id: 'test1', contentType: { sys: { id: 'page' }} },
+        fields: { 
+          name: { 'en-US': 'test1' },
+          author: { 'en-US': [{
+            sys: {
+              id: 'test2'
+            }
+          }]}
+        }
+      }
+    ]
+
+    // act
+    const stream = toReadable(entries).pipe(instance)
+
+    let errors = []
+    instance.on('invalid', (entry, err) => {
+      errors.push({ entry, err })
+    })
+
+    const result = await collect(stream)
+
+    // assert
+    expect(errors.length).to.equal(1)
+    expect(errors[0].entry.sys.id).to.equal('test1')
+    expect(errors[0].err[0]).to.equal('author has a broken link!')
+
+    expect(result.length).to.equal(0)
+  })
+
   it('validates array fields', async () => {
     const page = makeContentType('page')
     page.fields.push({
@@ -302,29 +399,6 @@ describe('validator', () => {
         })
   
         expect(result).to.equal('test expected to be a link to an entry but was a Asset')
-      })
-
-      it('expects value to not be a broken link', async () => {
-        const validation: IValidation = {
-          linkContentType: [
-            'foo'
-          ]
-        }
-
-        const instance = new ValidatorStream({ 
-          contentTypeGetter: async () => null,
-          entryInfoGetter: async (id) => null
-        })
-  
-        const result = await instance.validateField('test', validation, {
-          sys: {
-            type: 'Link',
-            linkType: 'Entry',
-            id: 'abcd1xab'
-          }
-        })
-  
-        expect(result).to.equal('test is a broken link!')
       })
 
       it('expects value\'s content type to be in the array', async () => {

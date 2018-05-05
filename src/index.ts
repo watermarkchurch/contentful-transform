@@ -41,6 +41,11 @@ const argv = yargs
     alias: 'x',
     describe: 'Do not output task progress'
   })
+  .option('verbose', {
+    boolean: true,
+    alias: 'v',
+    describe: 'Prints additional information and errors after the run finishes'
+  })
   .option('validate', {
     boolean: true,
     describe: 'Validates the transformed entries against their content types'
@@ -67,6 +72,7 @@ Run({
   query: argv.query,
   output: argv.output,
   validate: argv.validate,
+  verbose: argv.verbose,
   quiet: argv.quiet
 })
   .catch((err) => {

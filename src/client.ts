@@ -16,6 +16,12 @@ export interface IClientConfig {
 export class Client extends EventEmitter {
   private config: Readonly<IClientConfig>
 
+  public stats = {
+    requests: 0,
+    rateLimits: 0,
+    maxQueueSize: 0
+  }
+
   constructor(config: IClientConfig) {
     super()
 
@@ -126,12 +132,16 @@ export class Client extends EventEmitter {
 
   private _doReq(req: (cb: RequestCallback) => void, cb?: RequestCallback): void {
     this.gateInflightRequests(() => {
+      this.stats.requests++
+
       req((error, response, body) => {
         this.releaseNextRequest()
         if (error) {
           cb(error, response, body)
         } else {
           if (response.statusCode == 429) {
+            this.stats.rateLimits++
+
             let retrySeconds = 1
             try {
               const reset = response.headers['x-contentful-ratelimit-reset']
@@ -163,6 +173,7 @@ export class Client extends EventEmitter {
       run()
     } else {
       this.queue.push(run)
+      this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.queue.length)
     }
   }
 

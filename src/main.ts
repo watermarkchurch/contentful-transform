@@ -26,6 +26,7 @@ export interface ITransformArgs {
   transform: string
   output?: string[]
   validate?: boolean
+  verbose?: boolean
   quiet?: boolean
 }
 
@@ -172,6 +173,12 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     .run(context)
     .then(() => {
       errorMessages.forEach(msg => console.error(msg))
+      if (args.verbose) {
+        Object.keys(clients).forEach(space => {
+          const stats = clients[space].stats
+          console.log(chalk.gray(`${space}: ${stats.requests} total requests, rate limited ${stats.rateLimits} times, maximum request queue size of ${stats.maxQueueSize}`))
+        })
+      }
     })
 
   function getClient(spaceId: string): Client {

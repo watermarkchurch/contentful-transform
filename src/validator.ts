@@ -16,7 +16,8 @@ export class ValidatorStream extends Transform {
 
   constructor(config: IValidatorStreamConfig) {
     super({
-      objectMode: true
+      objectMode: true,
+      highWaterMark: 250
     })
     this.config = config
   }

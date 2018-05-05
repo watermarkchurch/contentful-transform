@@ -15,7 +15,8 @@ export class Publisher extends Writable {
 
   constructor(config: IPublisherConfig) {
     super({
-      objectMode: true
+      objectMode: true,
+      highWaterMark: 250
     })
 
     if (!config.client) {

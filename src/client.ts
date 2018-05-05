@@ -3,6 +3,7 @@ import { CoreOptions, RequestCallback, Response } from 'request'
 import { EventEmitter } from 'events'
 import * as path from 'path'
 import { PassThrough } from 'stream';
+import { Gate } from './gate';
 
 // require('request-debug')(request)
 
@@ -14,13 +15,15 @@ export interface IClientConfig {
 }
 
 export class Client extends EventEmitter {
-  private config: Readonly<IClientConfig>
+  public config: Readonly<IClientConfig>
 
   public stats = {
     requests: 0,
     rateLimits: 0,
     maxQueueSize: 0
   }
+
+  private gate: Gate
 
   constructor(config: IClientConfig) {
     super()
@@ -42,6 +45,7 @@ export class Client extends EventEmitter {
       host,
       maxInflightRequests: 4,
     }, config)
+    this.gate = new Gate({ maxInflight: this.config.maxInflightRequests })
   }
 
   stream(uri: string, options?: CoreOptions): NodeJS.ReadableStream {
@@ -131,11 +135,11 @@ export class Client extends EventEmitter {
   }
 
   private _doReq(req: (cb: RequestCallback) => void, cb?: RequestCallback): void {
-    this.gateInflightRequests(() => {
+    this.gate.lock(() => {
       this.stats.requests++
 
       req((error, response, body) => {
-        this.releaseNextRequest()
+        this.gate.release()
         if (error) {
           cb(error, response, body)
         } else {
@@ -163,27 +167,6 @@ export class Client extends EventEmitter {
         }
       })
     })
-  }
-
-  private inflight = 0
-  private queue = [] as (() => void)[]
-  private gateInflightRequests(run: () => void) {
-    if (this.inflight == 0 || this.inflight < this.config.maxInflightRequests) {
-      this.inflight++
-      run()
-    } else {
-      this.queue.push(run)
-      this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.queue.length)
-    }
-  }
-
-  private releaseNextRequest() {
-    if (this.queue.length > 0) {
-      const runner = this.queue.shift()
-      // yield the execution queue before running the next request
-      setTimeout(runner, 0)
-    } else {
-      this.inflight--;
-    }
+    this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.gate.stats.queueSize)
   }
 }

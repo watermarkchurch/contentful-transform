@@ -7,7 +7,7 @@ export interface IValidatorStreamConfig {
   contentTypeGetter: (ct: string) => Promise<IContentType>,
   entryInfoGetter?: (id: string) => Promise<DeepPartial<IEntry>>,
 
-  maxConcurrentEntries: number
+  maxConcurrentEntries?: number
 }
 
 type ContentTypeMap = { [id: string]: IContentType }

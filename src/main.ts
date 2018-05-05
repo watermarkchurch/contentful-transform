@@ -56,7 +56,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       task: pipeIt(
         process.stdin
           .pipe(stream)
-          .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
+          .pipe(FilterStream(isPublishedEntry))
           .pipe(entryInfoMap)
       )
     })
@@ -71,7 +71,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       tasks.push({
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
         task: pipeIt(stream
-          .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
+          .pipe(FilterStream(isPublishedEntry))
           .pipe(entryInfoMap)
         )
       })
@@ -97,7 +97,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     tasks.push({
       title: `Download from space ${args.source}`,
       task: pipeIt(source.stream(args.contentType, args.query)
-        .pipe(FilterStream((e) =>  e.sys && e.sys.publishedAt && e.sys.type == 'Entry'))
+        .pipe(FilterStream(isPublishedEntry))
         .pipe(entryInfoMap)
       )
     })
@@ -241,4 +241,16 @@ function parseInto(contentTypes: ContentTypeMap, jsonStream: NodeJS.ReadableStre
 
 function isContentType(json: any): json is IContentType {
   return json.sys && json.sys.type == 'ContentType'
+}
+
+function isPublishedEntry(e: any): e is IEntry {
+  if (!e.sys){
+    return false
+  }
+  if (e.sys.revision || e.sys.publishedAt) {
+    if(e.sys.type == 'Entry') {
+      return true
+    }
+  }
+  return false
 }

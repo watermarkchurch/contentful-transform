@@ -31,8 +31,10 @@ export class Client extends EventEmitter {
     if (!config.accessToken) {
       throw new Error('No access token given')
     }
-    if (config.accessToken.indexOf('CFPAT-') != 0) {
-      throw new Error('The access token must be a management token starting with "CFPAT-"')
+    if (config.host && config.host.match(/api\.contentful\.com/)) {
+      if(config.accessToken.indexOf('CFPAT-') != 0) {
+        throw new Error('The access token must be a management token starting with "CFPAT-"')
+      }
     }
     if (!config.spaceId) {
       throw new Error('No space ID given')
@@ -41,6 +43,7 @@ export class Client extends EventEmitter {
     const host = config.accessToken.startsWith('CFPAT-') ? 
       'https://api.contentful.com' :
       'https://cdn.contentful.com'
+    
     this.config = Object.assign({
       host,
       maxInflightRequests: 4,

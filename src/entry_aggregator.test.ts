@@ -6,7 +6,7 @@ import * as request from 'request'
 import { CoreOptions, Response } from "request";
 
 import { IEntry } from './model'
-import { EntryAggregator } from './entry_aggregator'
+import { EntryAggregator, selectFields } from './entry_aggregator'
 import {toReadable, collect} from './utils'
 
 const responseHeaders = {
@@ -52,13 +52,15 @@ describe('EntryAggregator', () => {
       const entries = [{
         sys: {
           id: 'test1',
-          contentType: { sys: { id: 'ct1' } }
+          contentType: { sys: { id: 'ct1' } },
+          revision: 1
         }
       },
       {
         sys: {
           id: 'test2',
-          contentType: { sys: { id: 'ct2' } }
+          contentType: { sys: { id: 'ct2' } },
+          revision: 2
         }
       }]
 
@@ -75,15 +77,47 @@ describe('EntryAggregator', () => {
     })
 
     it('gets an entry from the CDN if it doesnt already have it', async () => {
-      const entry = {
-        sys: {
-          id: 'test1',
-          contentType: { sys: { id: 'ct1' } }
+      const entry: IEntry = {
+        "sys": {
+          "space": {
+            "sys": {
+              "type": "Link",
+              "linkType": "Space",
+              "id": "testspace"
+            }
+          },
+          "id": "test1",
+          "type": "Entry",
+          "createdAt": "2018-04-05T21:37:35.115Z",
+          "updatedAt": "2018-05-05T04:37:53.140Z",
+          "environment": {
+            "sys": {
+              "id": "master",
+              "type": "Link",
+              "linkType": "Environment"
+            }
+          },
+          "revision": 3,
+          "contentType": {
+            "sys": {
+              "type": "Link",
+              "linkType": "ContentType",
+              "id": "author"
+            }
+          }
+        },
+        "fields": {
+          "name": {
+            "en-US": "KJ"
+          },
+          "displayName": {
+            "en-US": "kj"
+          }
         }
       }
 
-      nock('https://cdn.contentful.com')
-        .get('/spaces/testspace/entries/test1')
+      nock('https://test.contentful.com')
+        .get('/spaces/testspace/entries/test1?locale=*')
         .reply(200, entry, responseHeaders);
 
       const instance = new EntryAggregator({
@@ -94,19 +128,92 @@ describe('EntryAggregator', () => {
       const got1 = await instance.getEntryInfo('test1')
 
       // assert
-      expect(got1).to.deep.equal(entry)
+      expect(got1).to.deep.equal(selectFields(entry))
     })
 
-    it('returns nil when an entry doesnt exist on the CDN', async () => {
-      const entry = {
-        sys: {
-          id: 'test1',
-          contentType: { sys: { id: 'ct1' } }
+    it('gets an entry from the management API', async () => {
+      const entry: IEntry = {
+        "sys": {
+          "space": {
+            "sys": {
+              "type": "Link",
+              "linkType": "Space",
+              "id": "testspace"
+            }
+          },
+          "id": "test1",
+          "type": "Entry",
+          "createdAt": "2018-04-05T21:30:49.750Z",
+          "updatedAt": "2018-05-05T04:37:53.140Z",
+          "environment": {
+            "sys": {
+              "id": "master",
+              "type": "Link",
+              "linkType": "Environment"
+            }
+          },
+          "createdBy": {
+            "sys": {
+              "type": "Link",
+              "linkType": "User",
+              "id": "0SUbYs2vZlXjVR6bH6o83O"
+            }
+          },
+          "updatedBy": {
+            "sys": {
+              "type": "Link",
+              "linkType": "User",
+              "id": "0SUbYs2vZlXjVR6bH6o83O"
+            }
+          },
+          "publishedCounter": 3,
+          "version": 6,
+          "publishedBy": {
+            "sys": {
+              "type": "Link",
+              "linkType": "User",
+              "id": "0SUbYs2vZlXjVR6bH6o83O"
+            }
+          },
+          "publishedVersion": 5,
+          "firstPublishedAt": "2018-04-05T21:37:35.115Z",
+          "publishedAt": "2018-05-05T04:37:53.140Z",
+          "contentType": {
+            "sys": {
+              "type": "Link",
+              "linkType": "ContentType",
+              "id": "author"
+            }
+          }
+        },
+        "fields": {
+          "name": {
+            "en-US": "KJ"
+          },
+          "displayName": {
+            "en-US": "kj"
+          }
         }
       }
 
-      nock('https://cdn.contentful.com')
-        .get('/spaces/testspace/entries/test1')
+      nock('https://test.contentful.com')
+        .get('/spaces/testspace/entries/test1?locale=*')
+        .reply(200, entry, responseHeaders);
+
+      const instance = new EntryAggregator({
+        client: { get: clientGet }
+      })
+
+      // act
+      const got1 = await instance.getEntryInfo('test1')
+
+      // assert
+      expect(got1).to.deep.equal(selectFields(entry))
+    })
+
+    it('returns nil when an entry doesnt exist on the CDN', async () => {
+      nock('https://test.contentful.com')
+        .get('/spaces/testspace/entries/test1?locale=*')
         .reply(404, {
           "sys": {
             "type": "Error",
@@ -132,6 +239,77 @@ describe('EntryAggregator', () => {
       // assert
       expect(got1).to.not.exist
     })
+
+    it('returns nil when entry is not published', async () => {
+      const entry: IEntry = {
+        "sys": {
+          "space": {
+            "sys": {
+              "type": "Link",
+              "linkType": "Space",
+              "id": "testspace"
+            }
+          },
+          "id": "test1234",
+          "type": "Entry",
+          "createdAt": "2018-04-05T21:30:49.750Z",
+          "updatedAt": "2018-05-05T04:33:24.051Z",
+          "environment": {
+            "sys": {
+              "id": "master",
+              "type": "Link",
+              "linkType": "Environment"
+            }
+          },
+          "createdBy": {
+            "sys": {
+              "type": "Link",
+              "linkType": "User",
+              "id": "0SUbYs2vZlXjVR6bH6o83O"
+            }
+          },
+          "updatedBy": {
+            "sys": {
+              "type": "Link",
+              "linkType": "User",
+              "id": "0SUbYs2vZlXjVR6bH6o83O"
+            }
+          },
+          "publishedCounter": 2,
+          "version": 5,
+          "firstPublishedAt": "2018-04-05T21:37:35.115Z",
+          "contentType": {
+            "sys": {
+              "type": "Link",
+              "linkType": "ContentType",
+              "id": "author"
+            }
+          }
+        },
+        "fields": {
+          "name": {
+            "en-US": "Johnny Test"
+          },
+          "displayName": {
+            "en-US": "jtest"
+          }
+        }
+      }
+
+      nock('https://test.contentful.com')
+        .get('/spaces/testspace/entries/test1234?locale=*')
+        .reply(200, entry, responseHeaders);
+
+      const instance = new EntryAggregator({
+        client: { get: clientGet }
+      })
+
+      // act
+      const got1 = await instance.getEntryInfo('test1234')
+
+      // assert
+      expect(got1).to.not.exist
+    })
   })
 })
 
@@ -150,7 +328,7 @@ async function makeEntries(number: number = 1000): Promise<IEntry[]> {
 
 function clientGet(uri: string, options?: CoreOptions): Promise<Response> {
   return new Promise<Response>((resolve, reject) => {
-    request.get('https://cdn.contentful.com/spaces/testspace' + uri, options,
+    request.get('https://test.contentful.com/spaces/testspace' + uri, options,
       (err, resp) => {
         if (err) {
           reject(err)

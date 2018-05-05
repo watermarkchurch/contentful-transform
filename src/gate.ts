@@ -28,6 +28,10 @@ export class Gate extends EventEmitter {
     }
   }
 
+  public empty(): boolean {
+    return this.inflight <= 0 && this.queue.length == 0
+  }
+
   public lock(run: Task) {
     if (this.inflight == 0 || this.inflight < this.config.maxInflight) {
       this.inflight++
@@ -41,6 +45,7 @@ export class Gate extends EventEmitter {
   public release() {
     if (this.queue.length > 0) {
       const runner = this.queue.shift()
+      this.queueSize = this.queue.length
       // yield the execution queue before running the next request
       setTimeout(runner, 0)
     } else {

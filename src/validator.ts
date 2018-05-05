@@ -55,8 +55,7 @@ export class ValidatorStream extends Transform {
 
   _flush(callback: (err?: any) => void) {
     // we need to push any remaining inflight chunks before the stream closes
-    const { inflight, queueSize } = this.gate.stats()
-    if (inflight <= 0 && queueSize <= 0) {
+    if (this.gate.empty()) {
       callback()
     } else {
       this.gate.once('empty', () => callback())

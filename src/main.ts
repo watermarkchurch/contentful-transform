@@ -40,7 +40,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
 
   // aggregate all the entries, using the client to hit the source space if we need to
-  const entryInfoMap = new EntryAggregator({})
+  const entryAggregator = new EntryAggregator({})
 
   const contentTypeMap: ContentTypeMap = {}
   let contentTypeGetter = async (id: string) => contentTypeMap[id]
@@ -57,7 +57,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         process.stdin
           .pipe(stream)
           .pipe(FilterStream(isPublishedEntry))
-          .pipe(entryInfoMap)
+          .pipe(entryAggregator)
       )
     })
   } else {
@@ -72,7 +72,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
         task: pipeIt(stream
           .pipe(FilterStream(isPublishedEntry))
-          .pipe(entryInfoMap)
+          .pipe(entryAggregator)
         )
       })
     } catch {
@@ -82,7 +82,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   if (tasks.length == 0) {
     const client = getClient(args.source)
     const source = new CdnSource({ client })
-    entryInfoMap.client = client
+    entryAggregator.client = client
     contentTypeGetter = async (id: string) => {
       if (contentTypeMap[id]) {
         return contentTypeMap[id]
@@ -98,7 +98,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       title: `Download from space ${args.source}`,
       task: pipeIt(source.stream(args.contentType, args.query)
         .pipe(FilterStream(isPublishedEntry))
-        .pipe(entryInfoMap)
+        .pipe(entryAggregator)
       )
     })
   }
@@ -121,7 +121,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   if (args.validate) {
     const validator = new ValidatorStream({ 
       contentTypeGetter,
-      entryInfoGetter: (id) => entryInfoMap.getEntryInfo(id)
+      entryInfoGetter: (id) => entryAggregator.getEntryInfo(id)
     })
     validator.on('invalid', (entry: IEntry, errors: string[]) => {  
       const msg = chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`

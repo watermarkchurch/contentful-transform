@@ -25,9 +25,11 @@ export class ValidatorStream extends Transform {
       highWaterMark: 250
     })
 
-    this.config = Object.assign({
+    config = Object.assign({
       maxConcurrentEntries: 4
     }, config)
+
+    this.config = config
     this.gate = new Gate({ maxInflight: this.config.maxConcurrentEntries })
   }
 
@@ -103,10 +105,7 @@ export class ValidatorStream extends Transform {
             return
           }
 
-          const entryInfo = await this.config.entryInfoGetter(field['en-US'].sys.id)
-          if (!entryInfo) {
-            return `${fieldDef.id} is a broken link!`
-          }
+          return this.validateLink(fieldDef.id, field['en-US'].sys.id)
       }))
 
       promises.push(...contentType.fields
@@ -118,10 +117,7 @@ export class ValidatorStream extends Transform {
           }
 
           return (array['en-US'] as any[]).map(async (field) => {
-            const entryInfo = await this.config.entryInfoGetter(field.sys.id)
-            if (!entryInfo) {
-              return `${fieldDef.id} has a broken link!`
-            }
+            return this.validateLink(fieldDef.id, field.sys.id)
           })
       }))
     }
@@ -167,14 +163,15 @@ export class ValidatorStream extends Transform {
         return
       }
 
-      const entryInfo = await this.config.entryInfoGetter(field.sys.id)
-      if (!entryInfo) {
-        // validation message added above
-        return
-      }
-      if (validation.linkContentType.indexOf(entryInfo.sys.contentType.sys.id) == -1) {
-        return `${id} expected to link to one of [${validation.linkContentType}] but was a ${entryInfo.sys.contentType.sys.id}`
-      }
+      return await this.validateLink(id, field.sys.id, (linkedEntry) => {
+        if (!linkedEntry) {
+          // validation message added above
+          return
+        }
+        if (validation.linkContentType.indexOf(linkedEntry.sys.contentType.sys.id) == -1) {
+          return `${id} expected to link to one of [${validation.linkContentType}] but was a ${linkedEntry.sys.contentType.sys.id}`
+        }
+      })
     }
 
     return null
@@ -200,5 +197,22 @@ export class ValidatorStream extends Transform {
           this.validateField(fieldDef.id + '[' + index + ']', v, item)
         )
       )
+  }
+
+  private async validateLink(fieldId: string, id: string, cb?: (linkedEntry: DeepPartial<IEntry>) => string): Promise<string> {
+    try {
+      const linked = await this.config.entryInfoGetter(id)
+      if (cb) {
+        return cb(linked)
+      } else if (!linked) {
+        // just validate whether the link exists
+        return `${fieldId} is a broken link!`
+      }
+    } catch(e) {
+      // we're OK with timeouts
+      if (e.message !== 'timeout') {
+        throw e
+      }
+    }
   }
 }

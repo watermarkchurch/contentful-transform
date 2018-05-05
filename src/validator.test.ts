@@ -253,7 +253,7 @@ describe('validator', () => {
     // assert
     expect(errors.length).to.equal(1)
     expect(errors[0].entry.sys.id).to.equal('test1')
-    expect(errors[0].err[0]).to.equal('author has a broken link!')
+    expect(errors[0].err[0]).to.equal('author is a broken link!')
 
     expect(result.length).to.equal(0)
   })
@@ -466,7 +466,7 @@ describe('validator', () => {
           }
         })
   
-        expect(result).to.be.null
+        expect(result).to.not.exist
       })
     })
   })

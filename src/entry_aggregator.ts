@@ -9,10 +9,15 @@ export interface IEntryAggregatorConfig {
 
 export type EntryAggregatorClient = { get(uri: string, options?: CoreOptions): Promise<Response> }
 
+export type EntryMap = { 
+  [id: string]: DeepPartial<IEntry> | EntryWaiter[]
+}
+export type EntryWaiter = (e: DeepPartial<IEntry>) => any
+
 export class EntryAggregator extends Transform {
   public client: EntryAggregatorClient
 
-  public entryMap: { [id: string]: DeepPartial<IEntry> } = {}
+  public entryMap: EntryMap = {}
   
   constructor(config: IEntryAggregatorConfig) {
     super({
@@ -24,15 +29,20 @@ export class EntryAggregator extends Transform {
 
   _transform(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
     // add more fields as necessary
-    this.entryMap[chunk.sys.id] = selectFields(chunk)
+    const existing = this.entryMap[chunk.sys.id]
+    const entry = selectFields(chunk)
+    if (existing && !isEntry(existing)) {
+      existing.forEach((waiter) => waiter(entry))
+    }
+    this.entryMap[chunk.sys.id] = entry
     this.push(chunk)
     callback()
   }
 
   async getEntryInfo(id: string): Promise<DeepPartial<IEntry>> {
-    if (this.entryMap[id]) {
-      const result = this.entryMap[id]
-      return published(result) ? result : null
+    const entry = this.entryMap[id]
+    if (entry && isEntry(entry)) {
+      return published(entry) ? entry : null
     }
 
     if (this.client) {
@@ -48,10 +58,20 @@ export class EntryAggregator extends Transform {
       const result = this.entryMap[chunk.sys.id] = selectFields(chunk)
       return published(result) ? result : null
     } else {
-      // TODO: put this request in a queue and resolve it when the entry comes through the _write
-      throw new Error(`Entry ${id} has not yet been processed and I don't have an access token to go get it.`)      
+      if (!this.entryMap[id]) {
+        this.entryMap[id] = []
+      }
+      return new Promise((resolve, reject) => {
+        (<EntryWaiter[]>this.entryMap[id]).push(
+          (e) => resolve(e)
+        )
+      })
     }
   }
+}
+
+function isEntry(mapItem: DeepPartial<IEntry> | EntryWaiter[]): mapItem is DeepPartial<IEntry> {
+  return !Array.isArray(mapItem)
 }
 
 function published(entry: DeepPartial<IEntry>): boolean {

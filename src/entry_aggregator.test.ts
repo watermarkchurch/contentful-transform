@@ -7,7 +7,7 @@ import { CoreOptions, Response } from "request";
 
 import { IEntry } from './model'
 import { EntryAggregator, selectFields } from './entry_aggregator'
-import {toReadable, collect} from './utils'
+import {toReadable, collect, DeepPartial} from './utils'
 
 const responseHeaders = {
   'content-type': 'application/vnd.contentful.delivery.v1+json'
@@ -309,6 +309,36 @@ describe('EntryAggregator', () => {
 
       // assert
       expect(got1).to.not.exist
+    })
+
+    it('waits until an entry comes across the stream if it doesnt have a client', (done) => {
+      const entry = {
+        sys: {
+          id: 'test1',
+          contentType: { sys: { id: 'ct1' } },
+          revision: 1,
+          publishedVersion: undefined
+        }
+      }
+
+      const instance = new EntryAggregator({})
+
+      // act
+      const promise1 = instance.getEntryInfo('test1')
+
+      let got: DeepPartial<IEntry>
+      promise1.then((e) =>
+        got = e
+      )
+      promise1.catch((err) => done(err))
+      expect(got).to.not.exist
+
+      instance.write(entry, () => {
+        setTimeout(() => {
+          expect(got).to.deep.eq(entry)
+          done()
+        }, 0)
+      })
     })
   })
 })

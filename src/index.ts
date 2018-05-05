@@ -50,7 +50,6 @@ const argv = yargs
     boolean: true,
     describe: 'Validates the transformed entries against their content types'
   })
-  .demandCommand(1)
   .example("cat contentful-export.json | $0 'url=url.replace(/\/$/, \"\")'", "processes the file from stdin and trims trailing slashes from URLs")
   .example("$0 -s contentful-export.json -f 'sys.contentType.sys.id==\"foo\"' '_entry.fields.new_field[\"en-US\"]=\"something new\"", "adds a new field to every entry in the given file matching the 'foo' content type")
   .argv

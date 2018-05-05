@@ -1,3 +1,4 @@
+import { EventEmitter } from "events";
 
 export interface IGateConfig {
   maxInflight: number
@@ -5,28 +6,35 @@ export interface IGateConfig {
 
 export type Task = () => void
 
-export class Gate {
+export class Gate extends EventEmitter {
   public config: Readonly<IGateConfig>
 
-  public stats = {
-    queueSize: 0
-  }
-
   private inflight = 0
+  private queueSize = 0
   private queue: Task[] = []
 
   constructor(config: IGateConfig) {
+    super()
+
     this.config = Object.assign({
       maxInflight: 4
     }, config)
   }
+
+  public stats(): Readonly<{ inflight: number, queueSize: number }> {
+    return {
+      inflight: this.inflight,
+      queueSize: this.queueSize
+    }
+  }
+
   public lock(run: Task) {
     if (this.inflight == 0 || this.inflight < this.config.maxInflight) {
       this.inflight++
       run()
     } else {
       this.queue.push(run)
-      this.stats.queueSize = this.queue.length
+      this.queueSize = this.queue.length
     }
   }
 
@@ -37,6 +45,11 @@ export class Gate {
       setTimeout(runner, 0)
     } else {
       this.inflight--;
+      if (this.inflight == 0) {
+        this.emit('empty')
+      } else if (this.inflight < 0) {
+        throw new Error(`Invalid state! negative inflight requests`)
+      }
     }
   }
 }

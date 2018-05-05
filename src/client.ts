@@ -167,6 +167,6 @@ export class Client extends EventEmitter {
         }
       })
     })
-    this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.gate.stats.queueSize)
+    this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.gate.stats().queueSize)
   }
 }

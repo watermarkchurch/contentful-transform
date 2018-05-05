@@ -1,10 +1,13 @@
 import { Transform } from "stream";
 import { IEntry, IContentType, IValidation, IField } from "./model";
 import { DeepPartial } from './utils'
+import { Gate } from "./gate";
 
 export interface IValidatorStreamConfig {
   contentTypeGetter: (ct: string) => Promise<IContentType>,
-  entryInfoGetter?: (id: string) => Promise<DeepPartial<IEntry>>
+  entryInfoGetter?: (id: string) => Promise<DeepPartial<IEntry>>,
+
+  maxConcurrentEntries: number
 }
 
 type ContentTypeMap = { [id: string]: IContentType }
@@ -14,23 +17,48 @@ export class ValidatorStream extends Transform {
 
   private contentTypes: ContentTypeMap = {}
 
+  private gate: Gate
+
   constructor(config: IValidatorStreamConfig) {
     super({
       objectMode: true,
       highWaterMark: 250
     })
-    this.config = config
+
+    this.config = Object.assign({
+      maxConcurrentEntries: 4
+    }, config)
+    this.gate = new Gate({ maxInflight: this.config.maxConcurrentEntries })
   }
 
   _transform(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
-    this.validate(chunk)
-      .then(valid => {
-        if (valid) {
-          this.push(chunk)
-        }
-        callback()
-      })
-      .catch(err => callback(err))
+    this.gate.lock(() => {
+      // since up to 4 entries can be processed simultaneously, we can tell the
+      // transform stream that it can accept more data now.
+      callback()
+
+      this.validate(chunk)
+        .then(valid => {
+          if (valid) {
+            this.push(chunk)
+          }
+          this.gate.release()
+        })
+        .catch(err => {
+          this.gate.release()
+          this.emit('error', err)
+        })
+    })
+  }
+
+  _flush(callback: (err?: any) => void) {
+    // we need to push any remaining inflight chunks before the stream closes
+    const { inflight, queueSize } = this.gate.stats()
+    if (inflight <= 0 && queueSize <= 0) {
+      callback()
+    } else {
+      this.gate.once('empty', () => callback())
+    }
   }
 
   async validate(chunk: IEntry): Promise<boolean> {

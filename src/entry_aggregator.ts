@@ -68,6 +68,7 @@ export class EntryAggregator extends Transform {
         this.entryMap[id] = []
       }
       return new Promise((resolve, reject) => {
+        let timeout: NodeJS.Timer
         (<EntryWaiter[]>this.entryMap[id]).push(
           (err, entry) => {
             if (err) {
@@ -75,9 +76,10 @@ export class EntryAggregator extends Transform {
             } else {
               resolve(entry)
             }
+            clearTimeout(timeout)
           }
         )
-        setTimeout(() => {
+        timeout = setTimeout(() => {
           const existing = this.entryMap[id]
           if (isWaiterArray(existing)) {
             console.error(chalk.yellow(`\u26A0 Warning!  Entry ${id} did not come across the stream in over 10 seconds.\n` +

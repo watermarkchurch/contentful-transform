@@ -119,9 +119,16 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
   const errorMessages: string[] = []
   if (args.validate) {
+    // if we have a client, limit to 4 concurrent entry fetches.  Otherwise
+    // allow as many concurrent fetches as we have available memory, so that
+    // we can wait for linked entries to come across the stream.
+    // We have a 10 second timeout on fetching entries, which should be enough to
+    // safely process an incoming stream no matter how big.
+    const maxConcurrentEntries = clients[args.source] ? 4 : Number.MAX_SAFE_INTEGER
     const validator = new ValidatorStream({ 
       contentTypeGetter,
-      entryInfoGetter: (id) => entryAggregator.getEntryInfo(id)
+      entryInfoGetter: (id) => entryAggregator.getEntryInfo(id),
+      maxConcurrentEntries
     })
     validator.on('invalid', (entry: IEntry, errors: string[]) => {  
       const msg = chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`

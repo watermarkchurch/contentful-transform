@@ -50,7 +50,7 @@ export class Gate extends EventEmitter {
       setTimeout(runner, 0)
     } else {
       this.inflight--;
-      if (this.inflight == 0) {
+      if (this.empty()) {
         this.emit('empty')
       } else if (this.inflight < 0) {
         throw new Error(`Invalid state! negative inflight requests`)

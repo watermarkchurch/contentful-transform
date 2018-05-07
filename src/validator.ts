@@ -2,6 +2,7 @@ import { Transform } from "stream";
 import { IEntry, IContentType, IValidation, IField } from "./model";
 import { DeepPartial } from './utils'
 import { Gate } from "./gate";
+import chalk from "chalk";
 
 export interface IValidatorStreamConfig {
   contentTypeGetter: (ct: string) => Promise<IContentType>,
@@ -68,6 +69,13 @@ export class ValidatorStream extends Transform {
     if (!contentType) {
       contentType = await this.config.contentTypeGetter(contentTypeId)
       this.contentTypes[contentTypeId] = contentType
+    }
+    if (!contentType) {
+      console.error(chalk.yellow(`\u26A0 Warning!  Cannot get content type ${contentTypeId} for entry ${chunk.sys.id}.` +
+              `  This means we can't validate it!\n` +
+              `  To avoid this in the future, pass an authentication token on the command line using the '-a' parameter` +
+              ` or ensure\n  that your export contains content types.`))
+      return
     }
 
     // check the validations against each field

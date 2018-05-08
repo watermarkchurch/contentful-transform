@@ -27,6 +27,11 @@ const argv = yargs
     describe: 'An entry filter query used when loading from a space ID',
     implies: 'content-type'
   })
+  .option('draft', {
+    alias: ['d', 'preview'],
+    describe: 'Run the transform over draft (aka Preview) content',
+    implies: 'access-token'
+  })
   .option('filter', {
     alias: 'f',
     describe: 'A filtering function to apply after loading the data.'
@@ -70,6 +75,7 @@ Run({
   contentType: argv.contentType,
   query: argv.query,
   output: argv.output,
+  draft: argv.draft,
   validate: argv.validate,
   verbose: argv.verbose,
   quiet: argv.quiet

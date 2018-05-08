@@ -28,12 +28,20 @@ describe('client', () => {
         spaceId: 'testspace'
       })
 
-      // expectation - no requests to api.contentful.com
       nock('https://api.contentful.com')
         .post('/spaces/testspace/api_keys',
         {
-          name: "contentful-transform temporary CDN key"
-        }, 
+          "name": "contentful-transform temporary CDN key",
+          "environments": [
+            {
+              "sys": {
+                "type": "Link",
+                "linkType": "Environment",
+                "id": "master"
+              }
+            }
+          ]
+        },
         {
           reqheaders: {
             'content-type': 'application/vnd.contentful.management.v1+json',
@@ -89,6 +97,12 @@ describe('client', () => {
             }
           }
         })
+      nock('https://cdn.contentful.com')
+        .get('/spaces/testspace/content_types?limit=1')
+        .reply(401)
+      nock('https://cdn.contentful.com')
+        .get('/spaces/testspace/content_types?limit=1')
+        .reply(200)
 
       // act
       const client = await instance.getCdnClient()
@@ -96,7 +110,7 @@ describe('client', () => {
       // assert
       expect(client).to.not.equal(instance)
       expect(client.config.host).to.equal('https://cdn.contentful.com')
-      expect(client.config.accessToken).to.equal('exampleapikey')
+      expect(client.config.accessToken).to.equal('b4c0n73n7fu1')
       expect((instance as any).keys).to.include('exampleapikey')
     })
 
@@ -110,9 +124,7 @@ describe('client', () => {
       // expectation - no requests to api.contentful.com
       nock('https://api.contentful.com')
         .post('/spaces/testspace/api_keys',
-        {
-          name: "contentful-transform temporary CDN key"
-        }, 
+        () => true,
         {
           reqheaders: {
             'content-type': 'application/vnd.contentful.management.v1+json',

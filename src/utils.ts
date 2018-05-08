@@ -104,6 +104,12 @@ export function collect(stream: Stream): Promise<any[]> {
   })
 }
 
+export function wait(ms: number): Promise<void> {
+  return new Promise(resolve =>
+    setTimeout(() => resolve(), ms)
+  )
+}
+
 declare global {
   interface Array<T> {
     flatMap<E>(callback: (t: T, index?: number) => Array<E>): Array<E>

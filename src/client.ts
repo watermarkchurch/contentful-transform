@@ -4,6 +4,8 @@ import { EventEmitter } from 'events'
 import * as path from 'path'
 import { PassThrough } from 'stream';
 import { Gate } from './gate';
+import { wait } from './utils';
+import { Url } from 'url';
 
 // require('request-debug')(request)
 
@@ -130,55 +132,63 @@ export class Client extends EventEmitter {
       return this
     }
     const {host, spaceId} = this.config
-    return new Promise<Client>((resolve, reject) => {
-      this._doReq(cb => request.post(host + `/spaces/${spaceId}/api_keys`,
-          this.getOptions({
-            headers: {
-              'content-type': 'application/vnd.contentful.management.v1+json'
-            },
-            body: JSON.stringify({
-              "name": "contentful-transform temporary CDN key"
-            })
-          }),
-          cb
-        ),
-        (error, response) => {
-          if (error) {
-            reject(error)
-          } else if(response.statusCode != 201) {
-            reject(new Error(`${response.statusCode} when creating new content delivery key`))
-          } else {
-            const key = JSON.parse(response.body)
-            this.keys.push(key.sys.id)
-            resolve(new Client(Object.assign({}, 
-                this.config, 
-                { host: 'https://cdn.contentful.com', accessToken: key.sys.id }
-              )
-            ))
-          }
-        }
-      )      
-    })
+
+    const response = await this._doReq(cb => request.post(host + `/spaces/${spaceId}/api_keys`,
+        this.getOptions({
+          headers: {
+            'content-type': 'application/vnd.contentful.management.v1+json'
+          },
+          body: JSON.stringify({
+            "name": "contentful-transform temporary CDN key",
+            "environments": [
+              {
+                "sys": {
+                  "type": "Link",
+                  "linkType": "Environment",
+                  "id": "master"
+                }
+              }
+            ]
+          })
+        }),
+        cb
+      ),
+      201)
+    const key = JSON.parse(response.body)
+    this.keys.push(key.sys.id)
+
+    const client = new Client(Object.assign({}, 
+      this.config, 
+      { host: 'https://cdn.contentful.com', accessToken: key.accessToken }
+    ))
+
+    // wait until the CDN key becomes available on the CDN
+    let retries = 0
+    while(true) {
+      await wait(100)
+      const resp = await client.get('/content_types?limit=1')
+      if (resp.statusCode == 200) {
+        break
+      } else if (resp.statusCode != 401) {
+        throw new Error(`${resp.statusCode} polling for new CDN key to be ready`)
+      }
+      retries++
+      if (retries > 100) {
+        throw new Error(`CDN key ${key.sys.id} in space ${spaceId} was not ready after 10 seconds`)
+      }
+    }
+
+    return client
   }
 
   async cleanup(): Promise<any> {
     return Promise.all(this.keys.map((k) => 
-      new Promise<void>((resolve, reject) => {
-        this._doReq(cb => request.delete(this.config.host + `/spaces/${this.config.spaceId}/api_keys/${k}`,
-            this.getOptions(),
-            cb
-          ),
-          (error, response) => {
-            if (error) {
-              reject(error)
-            } else if (response.statusCode >= 400) {
-              reject(new Error(`${response.statusCode} when creating new content delivery key`))
-            } else {
-              resolve()
-            }
-          }
-        )
-      })
+      this._doReq(cb => request.delete(this.config.host + `/spaces/${this.config.spaceId}/api_keys/${k}`,
+          this.getOptions(),
+          cb
+        ),
+        204
+      )
     ))
   }
 
@@ -196,7 +206,32 @@ export class Client extends EventEmitter {
     return host + path.join(`/spaces/${spaceId}`, url)
   }
 
-  private _doReq(req: (cb: RequestCallback) => void, cb?: RequestCallback): void {
+  private _doReq(req: (cb: RequestCallback) => void, expect?: number): Promise<Response>
+  private _doReq(req: (cb: RequestCallback) => void, cb?: RequestCallback): void
+  private _doReq(req: (cb: RequestCallback) => void, expect?: number, cb?: RequestCallback): void
+
+  private _doReq(req: (cb: RequestCallback) => void, expect?: number | RequestCallback, callback?: RequestCallback): void | Promise<Response> {
+    let cb = callback
+    if (!cb && typeof(expect) != 'number') {
+      cb = expect as RequestCallback
+      expect = null
+    }
+    if (!cb) {
+      return new Promise<Response>((resolve, reject) => 
+        this._doReq(req, expect as number, (err, response, body) => {
+          if (err) {
+            reject(err)
+            return
+          }
+          if (expect && response.statusCode != expect) {
+            reject(new Error(`${response.statusCode} ${formatUri(response.request.uri)} - expected ${expect}`))
+            return
+          }
+          resolve(response)
+        })
+      )
+    }
+
     this.gate.lock(() => {
       this.stats.requests++
 
@@ -219,7 +254,7 @@ export class Client extends EventEmitter {
             }
 
             setTimeout(
-              () => this._doReq(req, cb),
+              () => this._doReq(req, expect as number, cb),
               retrySeconds * 1000 + 100
             )
             this.emit('ratelimit', retrySeconds)
@@ -231,4 +266,9 @@ export class Client extends EventEmitter {
     })
     this.stats.maxQueueSize = Math.max(this.stats.maxQueueSize, this.gate.stats().queueSize)
   }
+}
+
+function formatUri(uri: Url & { href: string, pathname: string }): string {
+  const {protocol, host, path} = uri
+  return `${protocol}//${host}${path}`
 }

@@ -14,18 +14,20 @@ export interface IClientConfig {
   accessToken: string
   spaceId: string
   maxInflightRequests?: number
+  verbose?: boolean
 }
 
 export class Client extends EventEmitter {
   public config: Readonly<IClientConfig>
 
-  public stats = {
+  private stats = {
     requests: 0,
     rateLimits: 0,
     maxQueueSize: 0
   }
 
   private keys: string[] = []
+  private cdnClient: Client
 
   private gate: Gate
 
@@ -50,9 +52,19 @@ export class Client extends EventEmitter {
     
     this.config = Object.assign({
       host,
-      maxInflightRequests: 4,
+      maxInflightRequests: 4
     }, config)
     this.gate = new Gate({ maxInflight: this.config.maxInflightRequests })
+  }
+
+  getStats(): Readonly<{requests: number, rateLimits: number, maxQueueSize: number}> {
+    const ret = Object.assign({}, this.stats)
+    if (this.cdnClient) {
+      ret.requests += this.cdnClient.stats.requests
+      ret.rateLimits += this.cdnClient.stats.rateLimits
+      ret.maxQueueSize = Math.max(ret.maxQueueSize, this.cdnClient.stats.maxQueueSize)
+    }
+    return ret
   }
 
   stream(uri: string, options?: CoreOptions): NodeJS.ReadableStream {
@@ -178,6 +190,7 @@ export class Client extends EventEmitter {
       }
     }
 
+    this.cdnClient = client
     return client
   }
 
@@ -240,6 +253,10 @@ export class Client extends EventEmitter {
         if (error) {
           cb(error, response, body)
         } else {
+          if (this.config.verbose) {
+            console.error(`${response.statusCode} ${formatUri(response.request.uri)}`)
+          }
+
           if (response.statusCode == 429) {
             this.stats.rateLimits++
 

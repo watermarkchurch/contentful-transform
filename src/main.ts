@@ -182,14 +182,14 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     await new Listr(tasks, 
       {
         concurrent: true,
-        renderer: args.quiet ? 'silent' : 'default'
+        renderer: (args.quiet || args.verbose) ? 'silent' : 'default'
       })
       .run(context)
       
     errorMessages.forEach(msg => console.error(msg))
     if (args.verbose) {
       Object.keys(clients).forEach(space => {
-        const stats = clients[space].stats
+        const stats = clients[space].getStats()
         console.log(chalk.gray(`${space}: ${stats.requests} total requests, rate limited ${stats.rateLimits} times, maximum request queue size of ${stats.maxQueueSize}`))
       })
     }
@@ -206,7 +206,8 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     }
     return clients[spaceId] = new Client({
       spaceId,
-      accessToken: args.accessToken
+      accessToken: args.accessToken,
+      verbose: args.verbose
     })
   }
 

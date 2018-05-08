@@ -115,8 +115,10 @@ export class ValidatorStream extends Transform {
           return this.validateLink(fieldDef.id, field['en-US'].sys.id)
       }))
 
+      // broken links in arrays should always be reported
+      // because you end up with a 'nil' element in the array
       promises.push(...contentType.fields
-        .filter(f => f.required && f.type == 'Array' && f.items.linkType == 'Entry')
+        .filter(f => f.type == 'Array' && f.items.linkType == 'Entry')
         .flatMap(fieldDef => {
           const array = chunk.fields[fieldDef.id]
           if (!array) {

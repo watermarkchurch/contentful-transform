@@ -36,6 +36,7 @@ type ContentTypeMap = { [id: string]: IContentType }
 export default async function Run(args: ITransformArgs): Promise<void> {
   const tasks: Array<ListrTask> = []
   const clients: { [space: string]: Client } = {}
+  const errorMessages: string[] = []
 
   const context = {
   }
@@ -83,13 +84,14 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
     if (tasks.length == 0) {
       let client = getClient(args.source)
+      let cdnClient = client
       if (!args.draft) {
         // use the public CDN client to source entries.
-        client = await client.getCdnClient()
+        cdnClient = await client.getCdnClient()
       }
 
-      const source = new CdnSource({ client })
-      entryAggregator.client = client
+      const source = new CdnSource({ client: cdnClient })
+      entryAggregator.client = cdnClient
       contentTypeGetter = async (id: string) => {
         if (contentTypeMap[id]) {
           return contentTypeMap[id]
@@ -124,7 +126,6 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       })
     }
 
-    const errorMessages: string[] = []
     if (args.validate) {
       // if we have a client, limit to 4 concurrent entry fetches.  Otherwise
       // allow as many concurrent fetches as we have available memory, so that
@@ -137,13 +138,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         entryInfoGetter: (id) => entryAggregator.getEntryInfo(id),
         maxConcurrentEntries
       })
-      validator.on('invalid', (entry: IEntry, errors: string[]) => {  
+      validator.on('invalid', (entry: IEntry, errors: string[]) => {
         const msg = chalk.red(`${entry.sys.id} is invalid:\n`) + `  ${errors.join('\n  ')}\n  https://app.contentful.com/spaces/${entry.sys.space.sys.id}/entries/${entry.sys.id}`
-        if (args.quiet) {
-          console.error(msg)
-        } else {
-          errorMessages.push(msg)
-        }
+        errorMessages.push(msg)
       })
 
       tasks.push({
@@ -185,19 +182,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         renderer: (args.quiet || args.verbose) ? 'silent' : 'default'
       })
       .run(context)
-      
-    errorMessages.forEach(msg => console.error(msg))
-    if (args.verbose) {
-      Object.keys(clients).forEach(space => {
-        const stats = clients[space].getStats()
-        console.log(chalk.gray(`${space}: ${stats.requests} total requests, rate limited ${stats.rateLimits} times, maximum request queue size of ${stats.maxQueueSize}`))
-      })
-    }
   } finally {
     await Promise.all(Object.keys(clients).map(space => 
       clients[space].cleanup()
     ))
   }
+
+  if (args.verbose) {
+    Object.keys(clients).forEach(space => {
+      const stats = clients[space].getStats()
+      console.log(chalk.gray(`${space}: ${stats.requests} total requests, rate limited ${stats.rateLimits} times, maximum request queue size of ${stats.maxQueueSize}`))
+    })
+  }
+  errorMessages.forEach(msg => console.error(msg))
 
   function getClient(spaceId: string): Client {
     let client = clients[spaceId]

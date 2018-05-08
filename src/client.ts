@@ -23,6 +23,8 @@ export class Client extends EventEmitter {
     maxQueueSize: 0
   }
 
+  private keys: string[] = []
+
   private gate: Gate
 
   constructor(config: IClientConfig) {
@@ -121,6 +123,63 @@ export class Client extends EventEmitter {
           }
         })
     })
+  }
+
+  async getCdnClient(): Promise<Client> {
+    if (this.config.host != 'https://api.contentful.com') {
+      return this
+    }
+    const {host, spaceId} = this.config
+    return new Promise<Client>((resolve, reject) => {
+      this._doReq(cb => request.post(host + `/spaces/${spaceId}/api_keys`,
+          this.getOptions({
+            headers: {
+              'content-type': 'application/vnd.contentful.management.v1+json'
+            },
+            body: JSON.stringify({
+              "name": "contentful-transform temporary CDN key"
+            })
+          }),
+          cb
+        ),
+        (error, response) => {
+          if (error) {
+            reject(error)
+          } else if(response.statusCode != 201) {
+            reject(new Error(`${response.statusCode} when creating new content delivery key`))
+          } else {
+            const key = JSON.parse(response.body)
+            this.keys.push(key.sys.id)
+            resolve(new Client(Object.assign({}, 
+                this.config, 
+                { host: 'https://cdn.contentful.com', accessToken: key.sys.id }
+              )
+            ))
+          }
+        }
+      )      
+    })
+  }
+
+  async cleanup(): Promise<any> {
+    return Promise.all(this.keys.map((k) => 
+      new Promise<void>((resolve, reject) => {
+        this._doReq(cb => request.delete(this.config.host + `/spaces/${this.config.spaceId}/api_keys/${k}`,
+            this.getOptions(),
+            cb
+          ),
+          (error, response) => {
+            if (error) {
+              reject(error)
+            } else if (response.statusCode >= 400) {
+              reject(new Error(`${response.statusCode} when creating new content delivery key`))
+            } else {
+              resolve()
+            }
+          }
+        )
+      })
+    ))
   }
 
   private getOptions(options?: CoreOptions): CoreOptions {

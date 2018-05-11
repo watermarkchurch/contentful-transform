@@ -29,6 +29,7 @@ const argv = yargs
   })
   .option('draft', {
     alias: ['d', 'preview'],
+    boolean: true,
     describe: 'Run the transform over draft (aka Preview) content',
     implies: 'access-token'
   })

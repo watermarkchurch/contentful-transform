@@ -146,9 +146,9 @@ describe('transform', () => {
     const contentType = {
       sys: { id: 'test' },
       fields: [
-        { name: 'test', type: 'Symbol' },
-        { name: 'bar', type: 'Number' },
-        { name: 'baz', type: 'Text' },
+        { id: 'test', type: 'Symbol' },
+        { id: 'bar', type: 'Number' },
+        { id: 'baz', type: 'Text' },
       ]
     }
 

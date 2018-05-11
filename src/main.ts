@@ -122,7 +122,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     if (args.transform && args.transform != '') {
       tasks.push({
         title: 'transform stream',
-        task: pipeIt(TransformStream(args.transform))
+        task: pipeIt(new TransformStream(args.transform, contentTypeGetter, args.verbose))
       })
     }
 

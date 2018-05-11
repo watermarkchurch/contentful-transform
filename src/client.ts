@@ -260,7 +260,7 @@ export class Client extends EventEmitter {
           cb(error, response, body)
         } else {
           if (this.config.verbose) {
-            console.error(`${response.statusCode} ${formatUri(response.request.uri)}`)
+            console.error(`${response.statusCode} ${response.request.method} ${formatUri(response.request.uri)}`)
           }
 
           if (response.statusCode == 429) {

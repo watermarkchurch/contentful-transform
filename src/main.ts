@@ -196,13 +196,15 @@ export default async function Run(args: ITransformArgs): Promise<void> {
   }
   errorMessages.forEach(msg => console.error(msg))
 
-  function getClient(spaceId: string): Client {
-    let client = clients[spaceId]
+  function getClient(source: string): Client {
+    let client = clients[source]
     if (client) {
       return client
     }
-    return clients[spaceId] = new Client({
+    const [spaceId, environment] = source.split('/')
+    return clients[source] = new Client({
       spaceId,
+      environment,
       accessToken: args.accessToken,
       verbose: args.verbose
     })

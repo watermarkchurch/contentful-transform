@@ -13,6 +13,7 @@ export interface IClientConfig {
   host?: string,
   accessToken: string
   spaceId: string
+  environment?: string
   maxInflightRequests?: number
   verbose?: boolean
 }
@@ -215,8 +216,13 @@ export class Client extends EventEmitter {
   }
 
   private getUrl(url: string): string {
-    const {host, spaceId} = this.config
-    return host + path.join(`/spaces/${spaceId}`, url)
+    let {host, spaceId, environment} = this.config
+    if (environment) {
+      environment = '/environments/' + environment
+    } else {
+      environment = ''
+    }
+    return host + path.join(`/spaces/${spaceId}${environment}`, url)
   }
 
   private _doReq(req: (cb: RequestCallback) => void, expect?: number): Promise<Response>

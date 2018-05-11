@@ -8,6 +8,54 @@ const responseHeaders = {
 
 describe('client', () => {
 
+  describe('get', () => {
+    it('gets from master if no environment', async () => {
+      const instance = new Client({accessToken: 'test123', spaceId: 'testspace'})
+
+      nock('https://cdn.contentful.com')
+        .get('/spaces/testspace/entries')
+        .reply(200, {
+          "sys": { "type": "Array" },
+          "skip": 0,
+          "limit": 0,
+          "total": 0,
+          "items": []
+        },
+        responseHeaders)
+
+      //act
+      const got = await instance.get('/entries')
+
+      // assert
+      expect(got.statusCode).to.equal(200)
+    })
+
+    it('gets from environment when givne', async () => {
+      const instance = new Client({
+        accessToken: 'test123',
+        spaceId: 'testspace',
+        environment: 'testenv'
+      })
+
+      nock('https://cdn.contentful.com')
+        .get('/spaces/testspace/environments/testenv/entries')
+        .reply(200, {
+          "sys": { "type": "Array" },
+          "skip": 0,
+          "limit": 0,
+          "total": 0,
+          "items": []
+        },
+        responseHeaders)
+
+      //act
+      const got = await instance.get('/entries')
+
+      // assert
+      expect(got.statusCode).to.equal(200)
+    })
+  })
+
   describe('getCdnClient', () => {
     it('returns itself when its already a CDN client', async () => {
       const instance = new Client({accessToken: 'test123', spaceId: 'testspace'})

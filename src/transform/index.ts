@@ -1,38 +1,36 @@
 import { Transform } from "stream";
 import * as path from 'path';
 
-import { IEntry } from "../model";
+import { IEntry, IContentType } from "../model";
 import { promisify } from "../utils";
 import { deepEqual } from "assert";
 
-export type TransformFunc = (e: IEntry) => IEntry | PromiseLike<IEntry>
-
-export function TransformStream(transform: string | TransformFunc): Transform {
-  const transformFunc = load_xform_func(transform)
-
-  return new Transformer(transformFunc)
-}
+export type TransformFunc = (entry: IEntry, contentType?: IContentType) => IEntry | PromiseLike<IEntry>
 
 const identityXform: TransformFunc = (e: IEntry) => {
   return e
 }
 
-class Transformer extends Transform {
+export class TransformStream extends Transform {
   xformFunc: TransformFunc
+  contentTypeGetter: (id: string) => Promise<IContentType>
 
-  constructor(xform: TransformFunc) {
+  constructor(xform: string | TransformFunc, contentTypeGetter?: (id: string) => Promise<IContentType>) {
     super({
       objectMode: true
     })
 
-    this.xformFunc = xform
+    this.xformFunc = load_xform_func(xform)
+    this.contentTypeGetter = contentTypeGetter || (id => Promise.resolve(null))
   }
 
-  async _transform(chunk: IEntry, encoding: string, cb: Function) {
+  async _transform(chunk: IEntry, encoding: string, cb: (err: any, entry?: IEntry) => void) {    
     try {
+      const contentType = chunk.sys.contentType && await this.contentTypeGetter(chunk.sys.contentType.sys.id)
+
       const clone = JSON.parse(JSON.stringify(chunk))
       let xformed = await promisify(
-        this.xformFunc(clone)
+        this.xformFunc(clone, contentType)
       )
 
       if (xformed === undefined) { xformed = clone }
@@ -55,7 +53,7 @@ class Transformer extends Transform {
   }
 }
 
-function load_xform_func(xform: string | TransformFunc): (entry: IEntry, context?: any) => undefined | IEntry | PromiseLike<IEntry> {
+function load_xform_func(xform: string | TransformFunc): TransformFunc {
   if (!xform || xform == '') {
     return identityXform;
   }
@@ -67,7 +65,7 @@ function load_xform_func(xform: string | TransformFunc): (entry: IEntry, context
   try {
     return require(path.resolve(xform))
   } catch {
-    return (entry, context) => eval_xform(xform, entry, context)
+    return (entry, contentType) => eval_xform(xform, entry, contentType)
   }
 }
 
@@ -75,20 +73,35 @@ function isFunc(filter: string | TransformFunc): filter is TransformFunc {
   return typeof(filter) === 'function'
 }
 
-function eval_xform(xform: string, entry: IEntry, context: any): any {
-  const fieldNames = Object.keys(entry.fields)
-
+function eval_xform(xform: string, entry: IEntry, contentType: IContentType): IEntry {
+  let fieldNames
+  if (contentType) {
+    fieldNames = contentType.fields.map(f => f.name)
+  } else {
+    fieldNames = Object.keys(entry.fields)
+  }
+  
   let xformFunc: Function = null
   const xformSrc = `xformFunc = function (_entry, sys, ${fieldNames.join(', ')}) {
     ${xform}
 
-    ${fieldNames.map((f) => `_entry.fields["${f}"]["en-US"] = ${f}`).join(';\n')}
+    ${fieldNames.map((f) => `
+    if (${f} !== undefined) {
+      _entry.fields["${f}"] = Object.assign(_entry.fields["${f}"] || {}, {
+        ["en-US"]: ${f}
+      })
+    } else {
+      delete(_entry.fields["${f}"]["en-US"]);
+    }
+`)
+      .join('\n')
+    }
     return _entry;
   }`
   eval(xformSrc)
   
   const fieldValues = [entry, entry.sys]
-  fieldValues.push(...fieldNames.map((f) => entry.fields[f]['en-US']))
+  fieldValues.push(...fieldNames.map((f) => entry.fields[f] ? entry.fields[f]['en-US'] : null))
 
   try {
     return xformFunc.apply(entry, fieldValues)

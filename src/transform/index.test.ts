@@ -3,6 +3,7 @@ import { expect } from 'chai';
 
 import { TransformStream } from './index'
 import {toReadable, collect} from '../utils'
+import { IContentType } from '../model';
 
 describe('transform', () => {
   describe('with func', () => {
@@ -12,7 +13,7 @@ describe('transform', () => {
         return Promise.resolve(entry)
       }
 
-      const instance = TransformStream(func)
+      const instance = new TransformStream(func)
 
       const entries = [
         {
@@ -45,7 +46,7 @@ describe('transform', () => {
     it('requires module', async () => {
       const func = './fixtures/transform_test'
 
-      const instance = TransformStream(func)
+      const instance = new TransformStream(func)
 
       const entries = [
         {
@@ -77,7 +78,7 @@ describe('transform', () => {
     it('evals expression', async () => {
       const func = 'test = test.replace(/\\d/, "X")'
 
-      const instance = TransformStream(func)
+      const instance = new TransformStream(func)
 
       const entries = [
         {
@@ -107,7 +108,7 @@ describe('transform', () => {
     it('handles missing fields in expression', async () => {
       const func = 'bar = 1'
 
-      const instance = TransformStream(func)
+      const instance = new TransformStream(func)
 
       const entries = [
         {
@@ -138,6 +139,45 @@ describe('transform', () => {
     })
   })
 
+
+  it('uses content type to populate missing fields if available', async () => {
+    const func = 'baz = "blah"';
+
+    const contentType = {
+      sys: { id: 'test' },
+      fields: [
+        { name: 'test', type: 'Symbol' },
+        { name: 'bar', type: 'Number' },
+        { name: 'baz', type: 'Text' },
+      ]
+    }
+
+    const instance = new TransformStream(func, async (id) => id == 'test' && <IContentType>contentType)
+
+    const entries = [
+      {
+        sys: { id: 'test2', contentType: { sys: { id: 'test' }} },
+        fields: { 
+          test: { 'en-US': 'blah' },
+          bar: { 'en-US': 'asdf' }
+        }
+      },
+      {
+        sys: { id: 'test3', contentType: { sys: { id: 'submenu' }} },
+        fields: { test: { 'en-US': 'foo2' } }
+      }
+    ]
+
+    // act
+    const stream = toReadable(entries).pipe(instance)
+    const result = await collect(stream)
+
+    // assert
+    expect(result.length).to.equal(1)
+    expect(result[0].sys.id).to.equal('test2')
+    expect(result[0].fields.baz['en-US']).to.equal('blah')
+  })
+
   it('only outputs changed entries', async () => {
 
     const func = (entry) => { 
@@ -145,7 +185,7 @@ describe('transform', () => {
       return Promise.resolve(entry)
     }
 
-    const instance = TransformStream(func)
+    const instance = new TransformStream(func)
 
     const entries = [
       {
@@ -179,7 +219,7 @@ describe('transform', () => {
       return Promise.resolve(entry)
     }
 
-    const instance = TransformStream(func)
+    const instance = new TransformStream(func)
 
     const entries = [
       {

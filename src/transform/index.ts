@@ -1,8 +1,8 @@
 import { Transform } from "stream";
 import * as path from 'path';
 
-import { IEntry } from "./model";
-import { promisify } from "./utils";
+import { IEntry } from "../model";
+import { promisify } from "../utils";
 import { deepEqual } from "assert";
 
 export type TransformFunc = (e: IEntry) => IEntry | PromiseLike<IEntry>

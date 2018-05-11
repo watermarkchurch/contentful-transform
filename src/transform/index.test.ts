@@ -1,8 +1,8 @@
 import {Readable, Writable, Stream, PassThrough} from 'stream'
 import { expect } from 'chai';
 
-import { TransformStream } from './transform'
-import {toReadable, collect} from './utils'
+import { TransformStream } from './index'
+import {toReadable, collect} from '../utils'
 
 describe('transform', () => {
   describe('with func', () => {

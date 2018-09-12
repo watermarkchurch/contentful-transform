@@ -2,7 +2,7 @@ import { Writable } from "stream"
 import * as request from 'request'
 import { CoreOptions, Response } from "request"
 
-import { IEntry } from "./model"
+import { IEntry, IAsset } from "./model"
 
 export interface IPublisherConfig {
   client: PublisherClient,
@@ -28,26 +28,32 @@ export class Publisher extends Writable {
     this.publish = config.publish
   }
 
-  _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
+  _write(chunk: IEntry | IAsset, encoding: string, callback: (err?: any) => void) {
     this.doReq(chunk)
       .then((resp) => callback())
       .catch((err) => callback(err))
   }
 
-  _writev(chunks: { chunk: IEntry, encoding: string}[], callback: (err?: any) => void) {
+  _writev(chunks: { chunk: IEntry | IAsset, encoding: string}[], callback: (err?: any) => void) {
     const promises = chunks.map(c => this.doReq(c.chunk))
     Promise.all(promises)
       .then(() => callback())
       .catch((err) => callback(err))
   }
 
-  private async doReq(chunk: IEntry): Promise<any> {
-    let response = await this.client.put(`/entries/${chunk.sys.id}`, {
-      headers: {
-        'content-type': 'application/vnd.contentful.management.v1+json',
-        'x-contentful-content-type': chunk.sys.contentType.sys.id,
-        'x-contentful-version': (chunk.sys.version - 1).toString(),
-      },
+  private async doReq(chunk: IEntry | IAsset): Promise<any> {
+    const headers = {
+      'content-type': 'application/vnd.contentful.management.v1+json',
+      'x-contentful-version': (chunk.sys.version - 1).toString(),
+    }
+    if (chunk.sys.type == 'Entry') {
+      Object.assign(headers, {
+        'x-contentful-content-type': chunk.sys.contentType.sys.id
+      })
+    }
+
+    let response = await this.client.put(`/${this.apiCollection(chunk)}/${chunk.sys.id}`, {
+      headers: headers,
       body: JSON.stringify(chunk)
     })
 
@@ -57,7 +63,7 @@ export class Publisher extends Writable {
     }
 
     if (this.shouldPublish(chunk)) {
-      response = await this.client.put(`/entries/${chunk.sys.id}/published`, {
+      response = await this.client.put(`/${this.apiCollection(chunk)}/${chunk.sys.id}/published`, {
         headers: {
           'x-contentful-version': chunk.sys.version.toString(),
         }
@@ -72,7 +78,10 @@ export class Publisher extends Writable {
     this.emit('data', chunk)
   }
 
-  private shouldPublish(chunk: IEntry): boolean {
+  private shouldPublish(chunk: IEntry | IAsset): boolean {
+    if (chunk.sys.type != 'Entry' && chunk.sys.type != 'Asset') {
+      return
+    }
     switch(this.publish) {
       case false:
         return false
@@ -80,6 +89,18 @@ export class Publisher extends Writable {
         return true
       default:
         return chunk.sys.publishedVersion == chunk.sys.version - 1;
+    }
+  }
+
+  private apiCollection(chunk: IEntry | IAsset): string {
+    switch(chunk.sys.type) {
+      case 'Entry':
+        return 'entries'
+      case 'Asset':
+        return 'assets'
+      default:
+        const c = <any>(chunk)
+        throw new Error(`Chunk ${c.sys.id} has unknown type '${c.sys.type}'`)
     }
   }
 }

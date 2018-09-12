@@ -32,6 +32,33 @@ export interface IEntry {
  }
 }
 
+export interface IAsset {
+  sys: {
+    space: { sys: any },
+    id: string,
+    type: 'Asset',
+    createdAt: string,
+    updatedAt: string,
+    createdBy?: { sys: any },
+    updatedBy?: { sys: any },
+    version?: number,
+    publishedBy?: { sys: any },
+    /** This is present on the Management API only when the entry is published */
+    publishedVersion?: number,
+    publishedCounter?: number,
+    firstPublishedAt?: string,
+    publishedAt?: string,
+    /** This is present on the CDN only.  Unpublished entries on the CDN return 404. */
+    revision?: number,
+    environment?: any,
+  },
+  fields: {
+    [name: string]: {
+      [locale: string]: any
+    }
+  }
+}
+
 export interface IContentType {
   sys: {
     space: {

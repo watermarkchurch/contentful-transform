@@ -52,6 +52,17 @@ const argv = yargs
     alias: 'v',
     describe: 'Prints additional information and errors after the run finishes'
   })
+  .option('publish', {
+    boolean: true,
+    alias: 'p',
+    describe: 'Publish transformed entries after writing them back to a space.  Only publishes entries not in a draft state.',
+    implies: 'output'
+  })
+  .option('publish-all', {
+    boolean: true,
+    describe: 'Force-publish all transformed entries even if they were in a draft state',
+    implies: 'output'
+  })
   .option('validate', {
     boolean: true,
     describe: 'Validates the transformed entries against their content types'
@@ -79,7 +90,8 @@ Run({
   draft: argv.draft,
   validate: argv.validate,
   verbose: argv.verbose,
-  quiet: argv.quiet
+  quiet: argv.quiet,
+  publish: argv.publishAll ? 'all' : !!argv.publish
 })
   .catch((err) => {
     console.error(err)

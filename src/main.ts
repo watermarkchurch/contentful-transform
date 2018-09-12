@@ -29,6 +29,7 @@ export interface ITransformArgs {
   draft?: boolean
   verbose?: boolean
   quiet?: boolean
+  publish?: boolean | 'all'
 }
 
 type ContentTypeMap = { [id: string]: IContentType }
@@ -168,7 +169,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
         })
       } else {
         // it's a space ID.  TODO: prompt for confirmation.
-        const publisher = new Publisher({ client: getClient(o) })
+        const publisher = new Publisher({ client: getClient(o), publish: args.publish })
         tasks.push({
           title: `Reupload to space ${o}`,
           task: pipeIt(publisher, true)

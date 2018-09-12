@@ -5,15 +5,9 @@ import { expect } from 'chai'
 import * as nock from 'nock'
 import * as sinon from 'sinon'
 
-import {toReadable, collect} from './utils'
 import {IEntry} from './model'
 import {Publisher} from './publisher'
 import {Client} from './client'
-import { equal } from 'assert';
-
-const responseHeaders = {
-  'content-type': 'application/vnd.contentful.delivery.v1+json'
-}
 
 describe('publisher', () => {
   let clock: sinon.SinonFakeTimers
@@ -41,21 +35,35 @@ describe('publisher', () => {
   it('publishes entries written to stream', async () => {
     const entries = await makeEntries(10)
     const scopes = entries.map((e) => {
-      return nock(`https://api.contentful.com`)
-        .put(`/spaces/testspace/entries/${e.sys.id}`,
-        (body: IEntry) => {
-          return body.sys.id == e.sys.id
-        },
-        {
-          reqheaders: {
-            'content-type': 'application/vnd.contentful.management.v1+json',
-            'x-contentful-content-type': e.sys.contentType.sys.id,
-            'x-contentful-version': e.sys.version.toString(),
-            host: 'api.contentful.com',
-            authorization: 'bearer test'
-          }
-        })
-        .reply(200, e, responseHeaders)
+      return [
+        nock(`https://api.contentful.com`)
+          .put(`/spaces/testspace/entries/${e.sys.id}`,
+          (body: IEntry) => {
+            return body.sys.id == e.sys.id
+          },
+          {
+            reqheaders: {
+              'content-type': 'application/vnd.contentful.management.v1+json',
+              'x-contentful-content-type': e.sys.contentType.sys.id,
+              'x-contentful-version': e.sys.version.toString(),
+              host: 'api.contentful.com',
+              authorization: 'bearer CFPAT-test'
+            }
+          })
+          .reply(200, e, responseHeaders),
+        nock(`https://api.contentful.com`)
+          .put(`/spaces/testspace/entries/${e.sys.id}/published`,
+          '',
+          {
+            reqheaders: {              
+              'x-contentful-version': (e.sys.version + 1).toString(),
+              host: 'api.contentful.com',
+              authorization: 'bearer CFPAT-test',
+              'content-length': '0'
+            }
+          })
+          .reply(200, e, responseHeaders),
+      ]
     })
     const instance = new Publisher({ client })
     const readable = createReader(entries)
@@ -69,7 +77,7 @@ describe('publisher', () => {
     await awaitDone(readable.pipe(instance))
 
     // assert
-    scopes.forEach(s => {
+    scopes.flatMap(a => a).forEach(s => {
       if(!s.isDone()) {
         throw new Error(s.pendingMocks().join(','))
       }
@@ -113,6 +121,7 @@ describe('publisher', () => {
 
   it('retries on 429 too many requests', async () => {
     const entries = await makeEntries(10)
+    entries.forEach(e => e.sys.publishedVersion = undefined)
     const scopes = entries.map((e) => {
       nock('https://api.contentful.com')
         .put(`/spaces/testspace/entries/${e.sys.id}`)
@@ -153,6 +162,51 @@ describe('publisher', () => {
       }
     })
     expect(rateLimitCount).to.equal(entries.length)
+  })
+
+  it('uploads but does not publish entry that was in a draft state', async () => {
+    const entries = await makeEntries(2)
+      // a never-published entry
+    entries[0].sys.publishedVersion = undefined
+      // an updated entry
+    entries[1].sys.version = entries[1].sys.publishedVersion + 2
+    const scopes = entries.map((e) => {
+      return [
+        nock(`https://api.contentful.com`)
+          .put(`/spaces/testspace/entries/${e.sys.id}`,
+          (body: IEntry) => {
+            return body.sys.id == e.sys.id
+          },
+          {
+            reqheaders: {
+              'content-type': 'application/vnd.contentful.management.v1+json',
+              'x-contentful-content-type': e.sys.contentType.sys.id,
+              'x-contentful-version': e.sys.version.toString(),
+              host: 'api.contentful.com',
+              authorization: 'bearer CFPAT-test'
+            }
+          })
+          .reply(200, e, responseHeaders)
+      ]
+    })
+    const instance = new Publisher({ client })
+    const readable = createReader(entries)
+
+    let published = 0
+    instance.on('data', (chunk) => {
+      published++
+    })
+
+    // act
+    await awaitDone(readable.pipe(instance))
+
+    // assert
+    scopes.flatMap(a => a).forEach(s => {
+      if(!s.isDone()) {
+        throw new Error(s.pendingMocks().join(','))
+      }
+    })
+    expect(published).to.eq(2)
   })
 })
 

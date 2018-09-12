@@ -5,13 +5,15 @@ import { CoreOptions, Response } from "request"
 import { IEntry } from "./model"
 
 export interface IPublisherConfig {
-  client: PublisherClient
+  client: PublisherClient,
+  publish?: boolean | 'all'
 }
 
 export type PublisherClient = { put(uri: string, options?: CoreOptions): Promise<Response> }
 
 export class Publisher extends Writable {
   private client: PublisherClient
+  private publish: string | boolean
 
   constructor(config: IPublisherConfig) {
     super({
@@ -23,6 +25,7 @@ export class Publisher extends Writable {
       throw new Error('No client given')
     }
     this.client = config.client
+    this.publish = config.publish
   }
 
   _write(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
@@ -39,7 +42,7 @@ export class Publisher extends Writable {
   }
 
   private async doReq(chunk: IEntry): Promise<any> {
-    const response = await this.client.put(`/entries/${chunk.sys.id}`, {
+    let response = await this.client.put(`/entries/${chunk.sys.id}`, {
       headers: {
         'content-type': 'application/vnd.contentful.management.v1+json',
         'x-contentful-content-type': chunk.sys.contentType.sys.id,
@@ -50,8 +53,33 @@ export class Publisher extends Writable {
 
     if (response.statusCode != 200) {
       this.emit('error', new Error(`${response.statusCode} ${response.body}`))
-    } else {
-      this.emit('data', chunk)
+      return
+    }
+
+    if (this.shouldPublish(chunk)) {
+      response = await this.client.put(`/entries/${chunk.sys.id}/published`, {
+        headers: {
+          'x-contentful-version': chunk.sys.version.toString(),
+        }
+      })
+
+      if (response.statusCode != 200) {
+        this.emit('error', new Error(`${response.statusCode} ${response.body}`))
+        return
+      }
+    }
+
+    this.emit('data', chunk)
+  }
+
+  private shouldPublish(chunk: IEntry): boolean {
+    switch(this.publish) {
+      case false:
+        return false
+      case "all":
+        return true
+      default:
+        return chunk.sys.publishedVersion == chunk.sys.version - 1;
     }
   }
 }

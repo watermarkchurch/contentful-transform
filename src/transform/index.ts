@@ -42,11 +42,6 @@ export class TransformStream extends Transform {
         cb(null, null)
       } catch {
         // not deep equal - that means we need to write it out.
-        // We also need to update it's version to reflect that a change was made
-        xformed.sys.version = xformed.sys.version + 1
-        xformed.sys.publishedVersion = xformed.sys.version
-        xformed.sys.publishedCounter = xformed.sys.publishedCounter + 1
-
         cb(null, xformed)
       }
     } catch(err) {

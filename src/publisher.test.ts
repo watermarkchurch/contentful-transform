@@ -39,7 +39,7 @@ describe('publisher', () => {
         nock(`https://api.contentful.com`)
           .put(`/spaces/testspace/entries/${e.sys.id}`,
           (body: IEntry) => {
-            return body.sys.id == e.sys.id
+            return body.fields
           },
           {
             reqheaders: {
@@ -174,9 +174,7 @@ describe('publisher', () => {
       return [
         nock(`https://api.contentful.com`)
           .put(`/spaces/testspace/entries/${e.sys.id}`,
-          (body: IEntry) => {
-            return body.sys.id == e.sys.id
-          },
+          (body: IEntry) => true,
           {
             reqheaders: {
               'content-type': 'application/vnd.contentful.management.v1+json',

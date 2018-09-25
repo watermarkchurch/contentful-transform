@@ -52,17 +52,12 @@ export class Publisher extends Writable {
   private async doReq(chunk: IEntry | IAsset): Promise<any> {
     const headers = {
       'content-type': 'application/vnd.contentful.management.v1+json',
-      'x-contentful-version': (chunk.sys.version - 1).toString(),
-    }
-    if (chunk.sys.type == 'Entry') {
-      Object.assign(headers, {
-        'x-contentful-content-type': chunk.sys.contentType.sys.id
-      })
+      'x-contentful-version': chunk.sys.version,
     }
 
     let response = await this.client.put(`/${this.apiCollection(chunk)}/${chunk.sys.id}`, {
       headers: headers,
-      body: JSON.stringify(chunk)
+      body: JSON.stringify({ fields: chunk.fields })
     })
 
     if (response.statusCode != 200) {

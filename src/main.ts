@@ -50,17 +50,14 @@ export default async function Run(args: ITransformArgs): Promise<void> {
     let contentTypeGetter = async (id: string) => contentTypeMap[id]
     
     if (args.source == '-') {
-      const stream = fs.createReadStream(args.source)
+      const stream = process.stdin
         .pipe(JSONStream.parse(args.raw ? undefined : '..*'))
 
       parseInto(contentTypeMap, stream)
 
       tasks.push({
         title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
-        task: pipeIt(
-          process.stdin
-            .pipe(stream)
-            .pipe(FilterStream(isPublishedEntry))
+        task: pipeIt(stream.pipe(FilterStream(isPublishedEntry))
             .pipe(entryAggregator)
         )
       })
@@ -74,8 +71,7 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
         tasks.push({
           title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
-          task: pipeIt(stream
-            .pipe(FilterStream(isPublishedEntry))
+          task: pipeIt(stream.pipe(FilterStream(isPublishedEntry))
             .pipe(entryAggregator)
           )
         })
@@ -267,7 +263,7 @@ function isPublishedEntry(e: any): e is IEntry {
     return false
   }
   if (e.sys.revision || e.sys.publishedAt) {
-    if(e.sys.type == 'Entry') {
+    if(e.sys.type == 'Entry' || e.sys.type == 'Asset') {
       return true
     }
   }

@@ -79,7 +79,7 @@ else if (!Array.isArray(argv.output)) {
 }
 
 Run({
-  source: argv.source || '-',
+  source: (argv.source || '-').trim(),
   accessToken: argv.accessToken || process.env['CONTENTFUL_ACCESS_TOKEN'],
   transform: argv._[0],
   filter: argv.filter,

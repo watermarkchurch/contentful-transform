@@ -2,7 +2,7 @@ import { Transform } from "stream";
 import { CoreOptions, Response } from "request";
 import chalk from "chalk";
 
-import { IEntry } from "./model";
+import { IEntry, IAsset } from "./model";
 import { DeepPartial } from "./utils";
 
 export interface IEntryAggregatorConfig {
@@ -30,14 +30,16 @@ export class EntryAggregator extends Transform {
     this.client = config.client
   }
 
-  _transform(chunk: IEntry, encoding: string, callback: (err?: any) => void) {
-    // add more fields as necessary
-    const existing = this.entryMap[chunk.sys.id]
-    const entry = selectFields(chunk)
-    if (existing && isWaiterArray(existing)) {
-      existing.forEach((waiter) => waiter(null, entry))
+  _transform(chunk: IEntry | IAsset, encoding: string, callback: (err?: any) => void) {
+    if (chunk.sys.type == 'Entry') {
+      const existing = this.entryMap[chunk.sys.id]
+      const entry = selectFields(<IEntry>chunk)
+      if (existing && isWaiterArray(existing)) {
+        existing.forEach((waiter) => waiter(null, entry))
+      }
+      this.entryMap[chunk.sys.id] = entry
     }
-    this.entryMap[chunk.sys.id] = entry
+
     this.push(chunk)
     callback()
   }
@@ -118,9 +120,11 @@ function published(entry: DeepPartial<IEntry>): boolean {
 }
 
 export function selectFields(chunk: IEntry): DeepPartial<IEntry> {
+  // add more fields as necessary
   return {
     sys: {
       id: chunk.sys.id,
+      type: chunk.sys.type,
       contentType: {
         sys: chunk.sys.contentType.sys
       },

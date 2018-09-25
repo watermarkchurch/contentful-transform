@@ -9,7 +9,12 @@ export interface IPublisherConfig {
   publish?: boolean | 'all'
 }
 
-export type PublisherClient = { put(uri: string, options?: CoreOptions): Promise<Response> }
+export type PublisherClient = { 
+  put(uri: string, options?: CoreOptions): Promise<Response>
+  config?: {
+    host?: string
+  }
+}
 
 export class Publisher extends Writable {
   private client: PublisherClient
@@ -23,6 +28,9 @@ export class Publisher extends Writable {
 
     if (!config.client) {
       throw new Error('No client given')
+    }
+    if (config.client.config && config.client.config.host != 'https://api.contentful.com') {
+      throw new Error('Please provide a Contentful management token (starting with "CFPAT-")')
     }
     this.client = config.client
     this.publish = config.publish
@@ -88,7 +96,11 @@ export class Publisher extends Writable {
       case "all":
         return true
       default:
-        return chunk.sys.publishedVersion == chunk.sys.version - 1;
+        if ('publishedVersion' in chunk.sys) {
+          return chunk.sys.publishedVersion == chunk.sys.version - 1
+        }
+        // don't publish when downloaded from CDN
+        return false;
     }
   }
 

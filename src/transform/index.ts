@@ -26,7 +26,7 @@ export class TransformStream extends Transform {
     this.verbose = verbose
   }
 
-  async _transform(chunk: IEntry, encoding: string, cb: (err: any, entry?: IEntry) => void) {    
+  async _transform(chunk: IEntry, encoding: string, cb: (err: any, entry?: IEntry) => void) {
     try {
       const contentType = chunk.sys.contentType && await this.contentTypeGetter(chunk.sys.contentType.sys.id)
 

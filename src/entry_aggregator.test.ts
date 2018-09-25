@@ -315,6 +315,7 @@ describe('EntryAggregator', () => {
       const entry = {
         sys: {
           id: 'test1',
+          type: 'Entry',
           contentType: { sys: { id: 'ct1' } },
           revision: 1,
           publishedVersion: undefined

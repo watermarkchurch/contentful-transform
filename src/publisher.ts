@@ -68,7 +68,7 @@ export class Publisher extends Writable {
     if (this.shouldPublish(chunk)) {
       response = await this.client.put(`/${this.apiCollection(chunk)}/${chunk.sys.id}/published`, {
         headers: {
-          'x-contentful-version': chunk.sys.version.toString(),
+          'x-contentful-version': chunk.sys.version + 1,
         }
       })
 

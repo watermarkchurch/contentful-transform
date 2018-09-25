@@ -9,7 +9,7 @@ import chalk from 'chalk'
 import { pipeIt } from './utils';
 import { FilterStream } from './filter';
 import { TransformStream } from './transform';
-import { IEntry, IContentType } from './model';
+import { IEntry, IContentType, IAsset } from './model';
 import { CdnSource } from './cdn_source';
 import { Publisher } from './publisher';
 import { Client } from './client';
@@ -57,7 +57,9 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
       tasks.push({
         title: `Parse stdin${args.raw ? ' (raw mode)' : ''}`,
-        task: pipeIt(stream.pipe(FilterStream(isPublishedEntry))
+        task: pipeIt(
+          stream
+            .pipe(FilterStream(isProcessable))
             .pipe(entryAggregator)
         )
       })
@@ -71,8 +73,10 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
         tasks.push({
           title: `Parse file ${args.source}${args.raw ? ' (raw mode)' : ''}`,
-          task: pipeIt(stream.pipe(FilterStream(isPublishedEntry))
-            .pipe(entryAggregator)
+          task: pipeIt(
+            stream
+              .pipe(FilterStream(isProcessable))
+              .pipe(entryAggregator)
           )
         })
       } catch {
@@ -102,9 +106,10 @@ export default async function Run(args: ITransformArgs): Promise<void> {
 
       tasks.push({
         title: `Download from space ${args.source}`,
-        task: pipeIt(source.stream(args.contentType, args.query)
-          .pipe(FilterStream(isPublishedEntry))
-          .pipe(entryAggregator)
+        task: pipeIt(
+          source.stream(args.contentType, args.query)
+            .pipe(FilterStream(isProcessable))
+            .pipe(entryAggregator)
         )
       })
     }
@@ -244,6 +249,19 @@ export default async function Run(args: ITransformArgs): Promise<void> {
       return ret
     }
   }
+
+  function isProcessable(e: any): e is IEntry | IAsset {
+    if (!e.sys){
+      return false
+    }
+    if (e.sys.type != 'Entry' && e.sys.type != 'Asset') {
+      return false
+    }
+    if (!args.draft && !e.sys.revision && !e.sys.publishedAt) {
+      return false
+    }
+    return true
+  }
 }
 
 function parseInto(contentTypes: ContentTypeMap, jsonStream: NodeJS.ReadableStream): void {
@@ -256,16 +274,4 @@ function parseInto(contentTypes: ContentTypeMap, jsonStream: NodeJS.ReadableStre
 
 function isContentType(json: any): json is IContentType {
   return json.sys && json.sys.type == 'ContentType'
-}
-
-function isPublishedEntry(e: any): e is IEntry {
-  if (!e.sys){
-    return false
-  }
-  if (e.sys.revision || e.sys.publishedAt) {
-    if(e.sys.type == 'Entry' || e.sys.type == 'Asset') {
-      return true
-    }
-  }
-  return false
 }

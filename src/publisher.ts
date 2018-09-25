@@ -6,7 +6,7 @@ import { IEntry, IAsset } from "./model"
 
 export interface IPublisherConfig {
   client: PublisherClient,
-  publish?: boolean | 'all'
+  publish?: boolean | 'force'
 }
 
 export type PublisherClient = { 
@@ -86,15 +86,14 @@ export class Publisher extends Writable {
       return
     }
     switch(this.publish) {
-      case false:
-        return false
-      case "all":
-        return true
-      default:
+      case true:
+        // only publish if we got it from the management API and have version info
         if ('publishedVersion' in chunk.sys) {
           return chunk.sys.publishedVersion == chunk.sys.version - 1
         }
-        // don't publish when downloaded from CDN
+      case "force":
+        return true
+      default:
         return false;
     }
   }

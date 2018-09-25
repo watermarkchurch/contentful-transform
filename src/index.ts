@@ -58,7 +58,7 @@ const argv = yargs
     describe: 'Publish transformed entries after writing them back to a space.  Only publishes entries not in a draft state.',
     implies: 'output'
   })
-  .option('publish-all', {
+  .option('force-publish', {
     boolean: true,
     describe: 'Force-publish all transformed entries even if they were in a draft state',
     implies: 'output'
@@ -91,7 +91,7 @@ Run({
   validate: argv.validate,
   verbose: argv.verbose,
   quiet: argv.quiet,
-  publish: argv.publishAll ? 'all' : !!argv.publish
+  publish: argv.forcePublish ? 'force' : argv.publish
 })
   .catch((err) => {
     console.error(err)

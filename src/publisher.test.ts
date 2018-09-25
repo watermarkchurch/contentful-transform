@@ -65,7 +65,7 @@ describe('publisher', () => {
           .reply(200, e, responseHeaders),
       ]
     })
-    const instance = new Publisher({ client })
+    const instance = new Publisher({ client, publish: true })
     const readable = createReader(entries)
 
     let published = 0

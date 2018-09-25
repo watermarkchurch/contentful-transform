@@ -29,7 +29,7 @@ export interface ITransformArgs {
   draft?: boolean
   verbose?: boolean
   quiet?: boolean
-  publish?: boolean | 'all'
+  publish?: boolean | 'force'
 }
 
 type ContentTypeMap = { [id: string]: IContentType }
